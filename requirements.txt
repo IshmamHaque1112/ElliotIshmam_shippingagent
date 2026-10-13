@@ -4,3 +4,4 @@ pydantic>=2,<3
 python-dotenv>=1.0
 pytest>=8
 gunicorn>=22
+tzdata
