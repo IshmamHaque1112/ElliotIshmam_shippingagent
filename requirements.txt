@@ -1,5 +1,6 @@
-anthropic
-python-dotenv
-pytest
-flask
-gunicorn
+anthropic>=0.40.0
+flask>=3.0,<4
+pydantic>=2,<3
+python-dotenv>=1.0
+pytest>=8
+gunicorn>=22

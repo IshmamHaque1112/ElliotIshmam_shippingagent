@@ -1,0 +1,15 @@
+{
+  "_comment": "Faults injected by the mock service, not stored in the dataset. 'times': N failures then success, or 'always'.",
+  "SH-1005": {
+    "event_timeline": {
+      "fault": "http_429",
+      "times": 2
+    }
+  },
+  "SH-1010": {
+    "get_tracking_status": {
+      "fault": "http_503",
+      "times": "always"
+    }
+  }
+}

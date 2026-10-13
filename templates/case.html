@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ case.shipment_id }} · Case file{% endblock %}
+{% block body %}
+<p><a href="/">&larr; Back to queue</a></p>
+<section class="panel result">
+  <div class="result-heading">
+    <h2>{{ case.shipment_id }} · {{ case.state|replace('_', ' ') }}{% if case.carrier %} · {{ case.carrier }}{% endif %}</h2>
+    <span>
+      <span class="badge {{ (case.severity or '')|lower }}">{{ case.severity or '-' }}</span>
+      <span class="badge {{ 'immediate' if case.urgency_badge == 'IMMEDIATE_SLACK_OR_CALL' else '' }}">{{ (case.urgency_badge or '-')|replace('_', ' ') }}</span>
+      <span class="badge">{{ case.run_status }}</span>
+    </span>
+  </div>
+  <p class="muted">Narrative source: {{ case.narrative }}</p>
+
+  <dl class="details">
+    <div><dt>Total exposure</dt><dd>${{ "{:,.2f}".format(case.financial.total_exposure_usd or 0) }}</dd></div>
+    <div><dt>Order value</dt><dd>{% if case.financial.order_value_usd is not none %}${{ "{:,.2f}".format(case.financial.order_value_usd) }}{% else %}Unknown{% endif %}</dd></div>
+    <div><dt>Accrued / projected penalty</dt><dd>{{ case.financial.accrued_penalty_usd if case.financial.accrued_penalty_usd is not none else '-' }} / {{ case.financial.projected_penalty_usd if case.financial.projected_penalty_usd is not none else '-' }}</dd></div>
+    <div><dt>Customer</dt><dd>{{ case.financial.customer or '-' }} ({{ case.financial.customer_tier or '-' }})</dd></div>
+    <div><dt>Promise</dt><dd>{{ case.timing.promise or '-' }}</dd></div>
+    <div><dt>Latest checkpoint</dt><dd>{{ case.timing.latest_checkpoint or '-' }}</dd></div>
+    <div><dt>Late now / projected</dt><dd>{{ case.timing.hours_late_now if case.timing.hours_late_now is not none else '-' }}h / {{ case.timing.projected_hours_late if case.timing.projected_hours_late is not none else '-' }}h</dd></div>
+    <div><dt>Dwell vs baseline</dt><dd>{{ case.timing.dwell_hours if case.timing.dwell_hours is not none else '-' }}h vs {{ case.timing.dwell_baseline_hours if case.timing.dwell_baseline_hours is not none else '-' }}h</dd></div>
+    <div><dt>ETA moved later</dt><dd>{{ case.timing.eta_forward_revisions if case.timing.eta_forward_revisions is not none else '-' }} times ({{ case.timing.eta_drift_hours if case.timing.eta_drift_hours is not none else '-' }}h)</dd></div>
+    <div><dt>Next penalty milestone</dt><dd>{% if case.timing.next_penalty_milestone %}{{ case.timing.next_penalty_milestone.label }} in {{ case.timing.next_penalty_milestone.minutes_from_now }} min{% else %}None{% endif %}</dd></div>
+    <div><dt>Root cause</dt><dd>{{ case.classification.root_cause }} (confidence {{ case.classification.confidence }})</dd></div>
+    <div><dt>Accountability</dt><dd>{{ case.classification.accountability }}</dd></div>
+  </dl>
+
+  <div class="section"><h2>Recommendation</h2>
+    <p><strong>{{ case.recommendation.label or case.recommendation.action_id or '-' }}</strong>
+    {% if case.recommendation.net_benefit_usd is not none %}· cost ${{ case.recommendation.cost_usd }}, penalty avoided ${{ case.recommendation.penalty_avoided_usd }}, net benefit ${{ case.recommendation.net_benefit_usd }}{% endif %}
+    {% if case.recommendation.requires_approval %}· approval: {{ case.recommendation.requires_approval }}{% endif %}</p>
+    {% if case.recommendation.runner_up %}<p class="muted">Runner-up: {{ case.recommendation.runner_up.action_id }} (net ${{ case.recommendation.runner_up.net_benefit_usd }})</p>{% endif %}
+    {% if case.recommendation.rationale %}<p>{{ case.recommendation.rationale }}</p>{% endif %}
+  </div>
+
+  <div class="section"><h2>Evidence</h2>
+    <p>{{ case.timeline_summary }}</p>
+    <ul class="reasons">{% for note in case.evidence_footnotes %}<li>{{ note }}</li>{% endfor %}</ul>
+    {% if case.unknowns %}<h2>Unknowns</h2><ul>{% for u in case.unknowns %}<li>{{ u }}</li>{% endfor %}</ul>{% endif %}
+    {% if case.data_quality %}<h2>Data quality</h2><ul>{% for u in case.data_quality %}<li>{{ u }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+
+  {% if case.carrier_contact %}
+  <div class="section"><h2>Carrier contact</h2>
+    <p>{{ case.carrier_contact.name }} · {{ case.carrier_contact.phone }} · {{ case.carrier_contact.email }}<br>
+    <span class="muted">Claim link: {{ case.carrier_contact.claim_link }}</span></p>
+  </div>
+  {% endif %}
+
+  <div class="section"><h2>Drafts (read-only; nothing is sent)</h2>
+    {% if case.drafts.customer_email or case.drafts.carrier_inquiry %}
+      <label for="cust">Customer email</label><textarea id="cust" readonly>{{ case.drafts.customer_email }}</textarea>
+      <label for="carr" style="margin-top:12px">Carrier inquiry</label><textarea id="carr" readonly>{{ case.drafts.carrier_inquiry }}</textarea>
+    {% else %}<p class="muted">No drafts in rules-only mode.</p>{% endif %}
+  </div>
+
+  <form method="post" action="/case/{{ case.shipment_id }}/analyze" class="section">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="classify" type="submit">Analyze with Claude</button>
+    <span class="muted">Counts against the demo limit.</span>
+  </form>
+</section>
+{% endblock %}
