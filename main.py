@@ -1,13 +1,15 @@
-"""Command-line entry point: `queue` (rules only) and `analyze` (case files)."""
+"""Command-line entry point: `queue` (rules only), `analyze` (case files) and `report` (static HTML)."""
 
 import argparse
 import json
+import os
 import sys
 
 from anthropic import APIError
 
 import agent
 import case_file
+import config
 import pipeline
 from api_errors import MissingKeyError, api_error_message
 
@@ -83,6 +85,15 @@ def run_analyze(shipment_id: str | None, no_llm: bool, as_json: bool) -> int:
     return 0
 
 
+def run_report(out: str) -> int:
+    import report
+
+    with open(out, "w", encoding="utf-8") as handle:
+        handle.write(report.render())
+    print(f"Wrote {out} (static snapshot; open it in a browser).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Delayed Shipment Exception Co-Pilot (read-only).")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -93,7 +104,14 @@ def main(argv: list[str] | None = None) -> int:
     analyze.add_argument("shipment_id", nargs="?")
     analyze.add_argument("--no-llm", action="store_true", help="rules and fallback case files only; no API key needed")
     analyze.add_argument("--json", action="store_true")
+    snapshot = commands.add_parser("report", help="write a self-contained static HTML report of the queue and saved cases")
+    snapshot.add_argument("--out", default="report.html")
+    parser.add_argument("--dataset", choices=sorted(config.DATASET_FILES), help="override DATASET for this run (dev or extended)")
     args = parser.parse_args(argv)
+    if args.dataset:
+        os.environ["DATASET"] = args.dataset
+    if args.command == "report":
+        return run_report(args.out)
     if args.command == "queue":
         return run_queue(args.json)
     return run_analyze(args.shipment_id, args.no_llm, args.json)

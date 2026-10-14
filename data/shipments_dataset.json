@@ -102,11 +102,6 @@
       "name": "Toronto Delivery Center",
       "tz": "America/Toronto",
       "dwell_baseline_hours": 12
-    },
-    "KC-RAMP": {
-      "name": "Kansas City Rail Ramp",
-      "tz": "America/Chicago",
-      "dwell_baseline_hours": 48
     }
   },
   "shipments": [

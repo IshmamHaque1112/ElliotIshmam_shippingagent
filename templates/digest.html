@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Digest{% endblock %}
+{% block body %}
+<h1>Daily roll-up preview</h1><p class="sub">What a morning summary would contain for items that are not urgent. A draft for reading only; nothing is sent.</p>
+<section class="panel"><label for="digest">Preview</label><textarea id="digest" readonly>{{ text }}</textarea><p><button type="button" data-copy="digest">Copy</button></p></section>
+<section class="panel"><h2>Needs review today ({{ daily|length }})</h2><ul>{% for r in daily %}<li><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a> · {{ r.customer }} · {{ r.exposure_usd|usd }}</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul>
+  <h2>Closed late ({{ closed|length }})</h2><ul>{% for r in closed %}<li><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a> · {{ r.customer }} · penalty {{ r.exposure_usd|usd }}</li>{% else %}<li class="muted">None.</li>{% endfor %}</ul></section>
+{% endblock %}

@@ -1,35 +1,11 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% from "_macros.html" import chip, case_chip %}
+{% block title %}Ranking{% endblock %}
 {% block body %}
-<section class="panel var" aria-label="Value at risk">
-  <div><span class="muted">Active exceptions</span><strong>{{ var.active_exceptions }}</strong></div>
-  <div><span class="muted">Revenue exposed</span><strong>${{ "{:,.2f}".format(var.revenue_exposed_usd) }}</strong></div>
-  <div><span class="muted">Accrued penalties</span><strong>${{ "{:,.2f}".format(var.accrued_penalties_usd) }}</strong></div>
-  <div><span class="muted">Closed late</span><strong>{{ var.closed_late_cases }} · ${{ "{:,.2f}".format(var.closed_late_penalties_usd) }}</strong></div>
-  <div><span class="muted">On track</span><strong>{{ var.on_track }}</strong></div>
-</section>
-<section class="panel" style="padding:12px 20px">
-  <table>
-    <thead><tr><th>#</th><th>Shipment</th><th>State</th><th>Urgency</th><th>Severity</th><th class="num">Exposure</th><th>Next milestone</th><th>Recommended</th><th></th></tr></thead>
-    <tbody>
-    {% for a in queue %}
-      <tr>
-        <td>{{ loop.index }}</td><td><strong>{{ a.shipment_id }}</strong></td><td>{{ a.state|replace('_', ' ') }}</td>
-        <td><span class="badge {{ 'immediate' if a.urgency_badge == 'IMMEDIATE_SLACK_OR_CALL' else '' }}">{{ (a.urgency_badge or '-')|replace('_', ' ') }}</span></td>
-        <td><span class="badge {{ (a.severity or '')|lower }}">{{ a.severity or '-' }}</span></td>
-        <td class="num">${{ "{:,.2f}".format(a.total_exposure_usd or 0) }}</td>
-        <td>{% if a.next_milestone %}{{ a.next_milestone.label }} in {{ a.next_milestone.minutes_from_now }} min{% else %}-{% endif %}</td>
-        <td>{{ a.recommended_action_id or '-' }}</td>
-        <td><div class="row-actions">
-          <a class="link-button" href="/case/{{ a.shipment_id }}">Rules only</a>
-          <form method="post" action="/case/{{ a.shipment_id }}/analyze">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="classify" type="submit">Analyze with Claude</button>
-          </form>
-        </div></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  <p class="cost-note">The queue is computed by rules with no API call. "Analyze with Claude" sends this case to Anthropic and counts against the demo limit of {{ max_analyses }} per server run.</p>
-</section>
+<h1>Ranked queue</h1><p class="sub">Ordered by priority score. Score = exposure, times {{ vip }} for VIP enterprise customers (ranking only; dollars are never inflated). <a href="/queue.csv">Download CSV</a></p>
+<section class="panel"><div class="scroll"><table><thead><tr><th>#</th><th>Shipment</th><th>State</th><th>Urgency</th><th>Severity</th><th class="num">Exposure</th><th class="num">Priority</th><th>Next milestone</th><th>Recommended</th><th>Claude case</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.rank }}</td><td><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a><br><span class="muted">{{ r.customer }}</span></td><td>{{ chip(r.state) }}</td>
+  <td>{{ chip('immediate' if r.urgency_badge == 'IMMEDIATE_SLACK_OR_CALL' else 'ok', r.urgency_badge) }}</td><td>{{ chip(r.severity) }}</td><td class="num">{{ r.exposure_usd|usd }}</td>
+  <td class="num">{{ r.priority_score|usd }}<details><summary>why</summary><span class="muted">{{ r.exposure_usd|usd }}{% if r.tier == 'VIP_ENTERPRISE' %} × {{ vip }} (VIP){% endif %}</span></details></td>
+  <td>{% if r.minutes_to_milestone is not none %}{{ r.minutes_to_milestone }} min{% else %}-{% endif %}</td><td>{{ r.recommended_action_id }}</td><td>{{ case_chip(status.get(r.shipment_id)) }}</td></tr>
+{% else %}<tr><td colspan="10" class="empty">The queue is empty.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}

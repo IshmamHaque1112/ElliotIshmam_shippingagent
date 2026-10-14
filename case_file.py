@@ -163,11 +163,17 @@ def fallback_case_file(assessment: dict[str, Any], status: str) -> CaseFile:
     )
 
 
+def _note(trace: dict[str, Any] | None, hint: str) -> None:
+    if trace is not None:
+        trace["rejections"].append(hint)
+
+
 def build_case_file(
     assessment: dict[str, Any],
     analyze: Callable[[str | None], dict[str, Any]] | None,
     status: str | None = None,
     state_path=None,
+    trace: dict[str, Any] | None = None,
 ) -> CaseFile:
     """`analyze(hint)` returns the model's raw submission; None means rules only (no LLM)."""
     status = status or run_status(assessment, state_path)
@@ -175,18 +181,25 @@ def build_case_file(
         return fallback_case_file(assessment, status)
 
     hint = None
+    if trace is not None:
+        trace.update(attempts=0, rejections=[])
     for _attempt in range(2):
+        if trace is not None:
+            trace["attempts"] += 1
         try:
             analysis = Analysis.model_validate(analyze(hint))
         except ValidationError as error:
             hint = f"schema problems: {error.errors()[0]['loc']} {error.errors()[0]['msg']}"
+            _note(trace, hint)
             continue
         except AgentError as error:
             hint = str(error)
+            _note(trace, hint)
             continue
         bad = mismatched_figures(analysis, assessment)
         if bad:
             hint = f"it contained dollar figures that code did not compute: {', '.join('$' + b for b in bad)}. Use only the rules output."
+            _note(trace, hint)
             continue
 
         sections = _code_sections(assessment, status)

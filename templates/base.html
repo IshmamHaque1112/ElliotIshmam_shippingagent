@@ -1,94 +1,24 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Delayed Shipment Co-Pilot{% endblock %}</title>
-    <style>
-      :root {
-        color-scheme: light;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #192b37;
-        background: #f2f6f4;
-      }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; }
-      header {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 20px max(24px, calc((100vw - 1040px) / 2));
-        background: #102e35; color: #f5fbf7;
-      }
-      .brand { font-weight: 750; letter-spacing: .02em; }
-      .demo-tag { color: #b8d6c8; font-size: .82rem; letter-spacing: .12em; text-transform: uppercase; }
-      main { width: min(920px, calc(100% - 32px)); margin: 64px auto; }
-      .intro { max-width: 680px; margin-bottom: 32px; }
-      .eyebrow { color: #337d66; font-size: .8rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-      h1 { margin: 10px 0 12px; font-size: clamp(2rem, 5vw, 3.35rem); line-height: 1.04; letter-spacing: -.04em; }
-      .intro p { color: #587078; font-size: 1.05rem; line-height: 1.65; }
-      .panel { background: white; border: 1px solid #dce6e1; border-radius: 18px; box-shadow: 0 16px 45px #173b3210; }
-      .lookup { padding: 28px; }
-      label { display: block; margin-bottom: 9px; font-size: .92rem; font-weight: 700; }
-      input {
-        width: 100%; padding: 14px 15px; border: 1px solid #bdcfca; border-radius: 9px;
-        color: #192b37; font: inherit; font-size: 1rem;
-      }
-      input:focus { outline: 3px solid #bbdfd0; border-color: #337d66; }
-      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
-      button { min-height: 46px; padding: 0 18px; border: 0; border-radius: 9px; font: inherit; font-weight: 700; cursor: pointer; }
-      .prepare { color: #173a31; background: #d9eee4; }
-      .classify { color: white; background: #176b57; }
-      button:hover { filter: brightness(.96); }
-      .cost-note { margin: 16px 0 0; color: #697e82; font-size: .84rem; line-height: 1.5; }
-      .samples { margin: 18px 0 0; color: #687b7f; font-size: .88rem; }
-      .result, .error { margin-top: 22px; padding: 24px 28px; }
-      .error { color: #7b3026; background: #fff8f5; border-color: #f0c6ba; }
-      .result-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-      h2 { margin: 0; font-size: 1.15rem; }
-      .badge { padding: 8px 11px; border-radius: 999px; background: #edf2ef; color: #425d55; font-size: .78rem; font-weight: 800; letter-spacing: .04em; }
-      .badge.on-track { background: #dff2e5; color: #23623d; }
-      .badge.needs-attention { background: #fff0d9; color: #845100; }
-      .badge.needs-manual-review { background: #fde7e2; color: #8a3427; }
-      .details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 24px; margin: 24px 0 0; }
-      .details div { border-top: 1px solid #e6ece9; padding-top: 11px; }
-      dt { color: #6b8081; font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
-      dd { margin: 5px 0 0; line-height: 1.4; overflow-wrap: anywhere; }
-      .reasons { margin: 20px 0 0; padding: 15px 17px; border-radius: 10px; background: #f5f8f6; color: #465d62; line-height: 1.5; }
-      footer { margin: 22px 0 0; color: #708386; font-size: .84rem; line-height: 1.55; }
-      @media (max-width: 560px) {
-        header { padding: 17px 20px; }
-        main { margin: 38px auto; }
-        .lookup, .result, .error { padding: 21px; }
-        .actions { flex-direction: column; }
-        button { width: 100%; }
-        .details { grid-template-columns: 1fr; }
-        .result-heading { align-items: flex-start; flex-direction: column; }
-      }
-    
-      table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-      th, td { text-align: left; padding: 10px 8px; border-top: 1px solid #e6ece9; vertical-align: top; }
-      th { color: #6b8081; font-size: .74rem; letter-spacing: .07em; text-transform: uppercase; }
-      .num { text-align: right; font-variant-numeric: tabular-nums; }
-      .var { display: flex; flex-wrap: wrap; gap: 28px; padding: 20px 28px; margin-bottom: 20px; }
-      .var strong { display: block; font-size: 1.5rem; }
-      .badge.immediate { background: #fde7e2; color: #8a3427; }
-      .badge.high { background: #fde7e2; color: #8a3427; } .badge.medium { background: #fff0d9; color: #845100; }
-      .row-actions { display: flex; gap: 8px; flex-wrap: wrap; } .row-actions form { margin: 0; }
-      .row-actions button, .link-button { min-height: 36px; padding: 0 12px; font-size: .84rem; }
-      a.link-button { display: inline-flex; align-items: center; border-radius: 9px; color: #173a31; background: #d9eee4; text-decoration: none; font-weight: 700; }
-      textarea { width: 100%; min-height: 150px; padding: 12px; border: 1px solid #bdcfca; border-radius: 9px; font: inherit; font-size: .9rem; }
-      .section { margin-top: 24px; } .muted { color: #697e82; font-size: .88rem; }
-      main { margin-top: 36px; } main.wide { width: min(1040px, calc(100% - 32px)); }
-</style>
-  </head>
-  <body>
-    <header>
-      <div class="brand"><a href="/" style="color:inherit;text-decoration:none">Delayed Shipment Co-Pilot</a></div>
-      <div class="demo-tag">Read-only demo</div>
-    </header>
-    <main class="wide">
-      {% if error %}<section class="panel error" role="alert">{{ error }}</section>{% endif %}
-      {% block body %}{% endblock %}
-      <footer>Fictional data. Code decides state and every number; Claude only explains and drafts. Nothing is sent, booked or filed; a human dispatcher decides.</footer>
-    </main>
-  </body>
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Delayed Shipment Co-Pilot{% endblock %}</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top"><div class="bar">
+    <div class="brand"><a href="/">Delayed Shipment Co-Pilot</a></div>
+    <nav aria-label="Main">{% for endpoint, label in nav %}<a href="{{ url_for(endpoint) }}"{% if active == endpoint %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+    <div class="tag">Read-only demo · {{ dataset_name }} data</div>
+  </div></header>
+  <main id="main">
+    {% if sim_offset %}<div class="banner warn" role="status">Simulated clock is +{{ "%g"|format(sim_offset) }} h. Saved Claude cases from earlier may be stale. <a href="/simulate">Simulation controls</a></div>{% endif %}
+    {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+    {% block body %}{% endblock %}
+    <footer class="foot">Fictional data. Code decides state and every number; Claude only explains and drafts. Nothing is sent, booked or filed. A human dispatcher decides.</footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
 </html>

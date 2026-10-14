@@ -91,6 +91,8 @@ def investigate(
             else:
                 seen_calls.add(key)
                 tool_calls += 1
+                if usage is not None:
+                    usage["tool_calls"] = usage.get("tool_calls", 0) + 1
                 content = fetch_module.fetch(service, use.name, shipment_id, **kwargs).as_tool_content()
             results.append({"type": "tool_result", "tool_use_id": use.id, "content": json.dumps(content)})
         messages += [{"role": "assistant", "content": response.content}, {"role": "user", "content": results}]

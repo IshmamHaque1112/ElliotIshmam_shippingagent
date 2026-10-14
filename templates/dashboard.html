@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% from "_macros.html" import chip, case_chip %}
+{% block body %}
+<h1>Dashboard</h1><p class="sub">Simulated time {{ snap.sim_now_utc }} · {{ snap.rows|length }} shipments</p>
+<section class="cards" aria-label="Value at risk">
+  <div class="card"><span>Active exceptions</span><strong>{{ var.active_exceptions }}</strong></div>
+  <div class="card"><span>Revenue exposed</span><strong>{{ var.revenue_exposed_usd|usd }}</strong></div>
+  <div class="card"><span>Accrued penalties</span><strong>{{ var.accrued_penalties_usd|usd }}</strong></div>
+  <div class="card"><span>Closed late</span><strong>{{ var.closed_late_cases }} · {{ var.closed_late_penalties_usd|usd }}</strong></div>
+  <div class="card"><span>On track</span><strong>{{ var.on_track }}</strong></div>
+</section>
+{% if batch is not none or error %}<section class="panel" aria-live="polite"><h2>Batch analysis</h2>
+  {% if batch %}<ul>{% for b in batch %}<li><a href="/cases/{{ b.case_id }}">{{ b.shipment_id }}</a> · {{ b.narrative }}</li>{% endfor %}</ul>{% endif %}</section>{% endif %}
+<section class="panel"><h2>Shipments by state</h2>{{ state_bar }}</section>
+<div class="grid g2">
+  <section class="panel"><h2>Exposure by carrier</h2>{{ carrier_chart }}</section>
+  <section class="panel"><h2>Exposure by root cause</h2>{{ cause_chart }}<p class="muted">Root cause comes from saved Claude cases; the rest is "Not analyzed".</p></section>
+</div>
+<section class="panel"><h2>Top 10 ranked exceptions</h2>
+  <div class="scroll"><table><thead><tr><th>#</th><th>Shipment</th><th>State</th><th>Urgency</th><th>Severity</th><th class="num">Exposure</th><th>Claude case</th><th></th></tr></thead><tbody>
+  {% for r in top %}<tr><td>{{ r.rank }}</td><td><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a><br><span class="muted">{{ r.customer }}</span></td><td>{{ chip(r.state) }}</td>
+    <td>{{ chip('immediate' if r.urgency_badge == 'IMMEDIATE_SLACK_OR_CALL' else 'ok', r.urgency_badge) }}</td><td>{{ chip(r.severity) }}</td><td class="num">{{ r.exposure_usd|usd }}</td>
+    <td>{{ case_chip(status.get(r.shipment_id)) }}</td><td><a class="btn" href="/case/{{ r.shipment_id }}">Open</a></td></tr>
+  {% else %}<tr><td colspan="8" class="empty">No active exceptions.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+<section class="panel"><h2>Analyze the top exceptions with Claude</h2>
+  <p class="muted">Skips cases that already have a fresh Claude analysis. {{ remaining }} of {{ max_analyses }} analyses left in this server run.</p>
+  {% if remaining %}<form class="row" method="post" action="/analyze-top" data-confirm="This sends several cases to Anthropic and uses API credits. Continue?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="n">How many</label>
+    <select id="n" name="n">{% for n in options %}<option value="{{ n }}">Top {{ n }}</option>{% endfor %}</select><button class="primary" type="submit">Analyze</button></form>
+    <p class="muted">Per analysis: {{ cost_note }}</p>
+  {% else %}<p>The demo limit is reached; restart the server or raise the limit to continue.</p>{% endif %}
+</section>
+{% endblock %}

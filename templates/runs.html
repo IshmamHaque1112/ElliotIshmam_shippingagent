@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% from "_macros.html" import chip %}
+{% block title %}Claude runs{% endblock %}
+{% block body %}
+<h1>Claude runs</h1><p class="sub">Every analysis that reached Anthropic. Cost is an estimate and appears only when the model's price is set in <code>config.PRICES</code>.</p>
+<section class="cards"><div class="card"><span>Runs</span><strong>{{ totals.runs }}</strong></div><div class="card"><span>Input tokens</span><strong>{{ "{:,}".format(totals.input_tokens) }}</strong></div>
+  <div class="card"><span>Output tokens</span><strong>{{ "{:,}".format(totals.output_tokens) }}</strong></div><div class="card"><span>Estimated cost</span><strong>{{ totals.est_cost_usd|usd }}</strong></div></section>
+<section class="panel"><h2>By model</h2><div class="scroll"><table><thead><tr><th>Model</th><th class="num">Runs</th><th class="num">Fallbacks</th><th class="num">Errors</th><th class="num">Input tokens</th><th class="num">Output tokens</th><th class="num">Est. cost</th><th class="num">Avg ms</th></tr></thead><tbody>
+{% for m in by_model %}<tr><td>{{ m.model }}</td><td class="num">{{ m.runs }}</td><td class="num">{{ m.fallbacks }}</td><td class="num">{{ m.errors }}</td><td class="num">{{ m.input_tokens }}</td><td class="num">{{ m.output_tokens }}</td><td class="num">{{ m.est_cost_usd|usd }}</td><td class="num">{{ m.avg_ms|num(0) }}</td></tr>
+{% else %}<tr><td colspan="8" class="empty">No runs yet.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="panel"><h2>Run log</h2><div class="scroll"><table><thead><tr><th>Time</th><th>Shipment</th><th>Case</th><th>Model</th><th>Status</th><th class="num">Tools</th><th class="num">In</th><th class="num">Out</th><th class="num">Cost</th><th class="num">ms</th><th>Rejections</th></tr></thead><tbody>
+{% for r in runs %}<tr><td class="muted">{{ r.created_at }}</td><td>{{ r.shipment_id }}</td><td>{% if r.case_id %}<a href="/cases/{{ r.case_id }}">#{{ r.case_id }}</a>{% else %}-{% endif %}</td><td>{{ r.model }}</td>
+  <td>{{ chip('wrong' if r.status == 'error' else 'fallback' if r.status == 'fallback' else 'ok', r.status) }}</td><td class="num">{{ r.tool_calls }}</td><td class="num">{{ r.input_tokens }}</td><td class="num">{{ r.output_tokens }}</td><td class="num">{{ r.est_cost_usd|usd }}</td><td class="num">{{ r.duration_ms }}</td><td>{{ r.rejection_reason or '' }}</td></tr>
+{% else %}<tr><td colspan="11" class="empty">No runs yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

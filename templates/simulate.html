@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Simulate{% endblock %}
+{% block body %}
+<h1>Simulation</h1><p class="sub">Move the simulated clock forward or inject a fault, then watch the queue change. The data has no events after its original time, so the clock only moves forward.</p>
+<section class="panel"><h2>Clock</h2><p>Simulated now: <b>{{ snap.sim_now_utc }}</b> (offset +{{ "%g"|format(sim_offset) }} h).</p>
+  {% if saved_cases %}<p class="muted">{{ saved_cases }} saved case(s) will show as stale after you move the clock.</p>{% endif %}
+  <div class="row">{% for h in (6, 24, 72) %}<form class="inline" method="post" action="/simulate/advance"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="hours" value="{{ h }}"><button type="submit">+{{ h }} h</button></form>{% endfor %}
+    <form class="inline" method="post" action="/simulate/reset"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Reset clock and faults</button></form></div></section>
+<section class="panel"><h2>Faults</h2><p class="muted">A fault makes a tool fail on every call. After three attempts the shipment becomes unable to verify. "off" removes a scheduled fault; "clear" removes your override.</p>
+  <form class="filters" method="post" action="/simulate/fault"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div><label for="sid">Shipment</label><select id="sid" name="shipment_id">{% for i in ids %}<option>{{ i }}</option>{% endfor %}</select></div>
+    <div><label for="tool">Tool</label><select id="tool" name="tool">{% for t in tool_names %}<option>{{ t }}</option>{% endfor %}</select></div>
+    <div><label for="fault">Fault</label><select id="fault" name="fault">{% for f in faults %}<option>{{ f }}</option>{% endfor %}<option>off</option><option>clear</option></select></div><button class="primary" type="submit">Apply</button></form>
+  <h3>Your overrides</h3><ul>{% for sid, tools in overrides.items() %}{% for tool, spec in tools.items() %}<li>{{ sid }} · {{ tool }} · {{ spec.fault if spec else 'off' }}</li>{% endfor %}{% else %}<li class="muted">None.</li>{% endfor %}</ul>
+  <h3>Scheduled faults in the dataset</h3><ul>{% for sid, tools in scheduled.items() %}{% for tool, spec in tools.items() %}<li>{{ sid }} · {{ tool }} · {{ spec.fault }} ({{ spec.times }})</li>{% endfor %}{% else %}<li class="muted">None.</li>{% endfor %}</ul></section>
+{% endblock %}

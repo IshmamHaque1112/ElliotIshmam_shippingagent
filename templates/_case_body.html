@@ -1,0 +1,33 @@
+{% from "_macros.html" import chip %}
+<section class="panel">
+  <h2>{{ case.shipment_id }} · {{ case.state|words }}{% if case.carrier %} · {{ case.carrier }}{% endif %}</h2>
+  <p>{% if case.severity %}{{ chip(case.severity) }}{% endif %} {% if case.urgency_badge %}{{ chip('immediate' if case.urgency_badge == 'IMMEDIATE_SLACK_OR_CALL' else 'ok', case.urgency_badge) }}{% endif %} {{ chip(case.run_status) }}
+    <span class="muted">Narrative: {{ case.narrative }}</span></p>
+  <dl class="facts">
+    <div><dt>Total exposure</dt><dd>{{ case.financial.total_exposure_usd|usd }}</dd></div><div><dt>Order value</dt><dd>{{ case.financial.order_value_usd|usd }}</dd></div>
+    <div><dt>Accrued / projected penalty</dt><dd>{{ case.financial.accrued_penalty_usd|usd }} / {{ case.financial.projected_penalty_usd|usd }}</dd></div>
+    <div><dt>Customer</dt><dd>{{ case.financial.customer or '-' }} ({{ case.financial.customer_tier|words }})</dd></div>
+    <div><dt>Promise</dt><dd>{{ case.timing.promise or '-' }}</dd></div><div><dt>Latest checkpoint</dt><dd>{{ case.timing.latest_checkpoint or '-' }}</dd></div>
+    <div><dt>Late now / projected</dt><dd>{{ case.timing.hours_late_now|hrs }} / {{ case.timing.projected_hours_late|hrs }}</dd></div>
+    <div><dt>Dwell vs baseline</dt><dd>{{ case.timing.dwell_hours|hrs }} vs {{ case.timing.dwell_baseline_hours if case.timing.dwell_baseline_hours is not none else '-' }}h</dd></div>
+    <div><dt>ETA moved later</dt><dd>{{ case.timing.eta_forward_revisions if case.timing.eta_forward_revisions is not none else '-' }} times</dd></div>
+    <div><dt>Next penalty milestone</dt><dd>{% if case.timing.next_penalty_milestone %}{{ case.timing.next_penalty_milestone.label }} in {{ case.timing.next_penalty_milestone.minutes_from_now }} min{% else %}None{% endif %}</dd></div>
+    <div><dt>Root cause</dt><dd>{{ case.classification.root_cause }} (confidence {{ case.classification.confidence }})</dd></div><div><dt>Accountability</dt><dd>{{ case.classification.accountability }}</dd></div>
+  </dl>
+</section>
+<section class="panel"><h2>Recommendation</h2>
+  <p><b>{{ case.recommendation.label or case.recommendation.action_id or '-' }}</b>
+  {% if case.recommendation.net_benefit_usd is not none %} · cost {{ case.recommendation.cost_usd|usd }}, penalty avoided {{ case.recommendation.penalty_avoided_usd|usd }}, net benefit {{ case.recommendation.net_benefit_usd|usd }}{% endif %}
+  {% if case.recommendation.requires_approval %} · approval: {{ case.recommendation.requires_approval }}{% endif %}</p>
+  {% if case.recommendation.runner_up %}<p class="muted">Runner-up: {{ case.recommendation.runner_up.action_id }} (net {{ case.recommendation.runner_up.net_benefit_usd|usd }})</p>{% endif %}
+  {% if case.recommendation.rationale %}<p>{{ case.recommendation.rationale }}</p>{% endif %}</section>
+<section class="panel"><h2>Evidence</h2><p>{{ case.timeline_summary }}</p>
+  <ul>{% for note in case.evidence_footnotes %}<li>{{ note }}</li>{% endfor %}</ul>
+  {% if case.unknowns %}<h3>Unknowns</h3><ul>{% for u in case.unknowns %}<li>{{ u }}</li>{% endfor %}</ul>{% endif %}
+  {% if case.data_quality %}<h3>Data quality</h3><ul>{% for u in case.data_quality %}<li>{{ u }}</li>{% endfor %}</ul>{% endif %}</section>
+{% if case.carrier_contact %}<section class="panel"><h2>Carrier contact</h2><p>{{ case.carrier_contact.name }} · {{ case.carrier_contact.phone }} · {{ case.carrier_contact.email }}<br><span class="muted">Claim link: {{ case.carrier_contact.claim_link }}</span></p></section>{% endif %}
+<section class="panel"><h2>Drafts (read-only; nothing is sent)</h2>
+  {% if case.drafts.customer_email or case.drafts.carrier_inquiry %}
+  <label for="cust">Customer email</label><textarea id="cust" readonly>{{ case.drafts.customer_email }}</textarea><p><button type="button" data-copy="cust">Copy</button></p>
+  <label for="carr">Carrier inquiry</label><textarea id="carr" readonly>{{ case.drafts.carrier_inquiry }}</textarea><p><button type="button" data-copy="carr">Copy</button></p>
+  {% else %}<p class="muted">No drafts in rules-only mode.</p>{% endif %}</section>

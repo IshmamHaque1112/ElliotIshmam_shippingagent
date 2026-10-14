@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% from "_macros.html" import chip, case_chip %}
+{% block title %}Deliveries{% endblock %}
+{% block body %}
+<h1>All deliveries</h1><p class="sub">{{ page.total }} shipments match.</p>
+<form class="filters" method="get" action="/shipments">
+  <div><label for="q">Search</label><input id="q" name="q" value="{{ request.args.q or '' }}" placeholder="id, customer or order"></div>
+  <div><label for="state">State</label><select id="state" name="state"><option value="">Any</option>{% for s in opts.states %}<option value="{{ s }}"{% if request.args.state == s %} selected{% endif %}>{{ s|words }}</option>{% endfor %}</select></div>
+  <div><label for="carrier">Carrier</label><select id="carrier" name="carrier"><option value="">Any</option>{% for cid, name in opts.carriers %}<option value="{{ cid }}"{% if request.args.carrier == cid %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+  <div><label for="tier">Tier</label><select id="tier" name="tier"><option value="">Any</option>{% for t in opts.tiers %}<option value="{{ t }}"{% if request.args.tier == t %} selected{% endif %}>{{ t|words }}</option>{% endfor %}</select></div>
+  <div><label for="severity">Severity</label><select id="severity" name="severity"><option value="">Any</option>{% for s in opts.severities %}<option{% if request.args.severity == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+  <div><label for="badge">Urgency</label><select id="badge" name="badge"><option value="">Any</option>{% for s in opts.badges %}<option value="{{ s }}"{% if request.args.badge == s %} selected{% endif %}>{{ s|words }}</option>{% endfor %}</select></div>
+  <div><label for="sort">Sort by</label><select id="sort" name="sort">{% for k in ('id', 'exposure', 'priority', 'promise') %}<option value="{{ k }}"{% if request.args.sort == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></div>
+  <button class="primary" type="submit">Apply</button><a class="btn" href="/shipments">Clear</a>
+</form>
+<section class="panel"><div class="scroll"><table><thead><tr><th>Shipment</th><th>Customer</th><th>Carrier</th><th>State</th><th>Severity</th><th class="num">Exposure</th><th>Promise (dispatcher time)</th><th>Rank</th><th>Claude case</th></tr></thead><tbody>
+{% for r in page['items'] %}<tr><td><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a><br><span class="muted">{{ r.order_id }}</span></td><td>{{ r.customer }}<br><span class="muted">{{ r.tier|words }}</span></td><td>{{ r.carrier }}</td>
+  <td>{{ chip(r.state) }}</td><td>{% if r.severity %}{{ chip(r.severity) }}{% else %}-{% endif %}</td><td class="num">{{ r.exposure_usd|usd }}</td><td>{{ r.promise_dispatcher }}</td><td>{{ r.rank or '-' }}</td><td>{{ case_chip(status.get(r.shipment_id)) }}</td></tr>
+{% else %}<tr><td colspan="9" class="empty">No shipments match these filters.</td></tr>{% endfor %}</tbody></table></div>
+<nav class="pager" aria-label="Pages">
+  {% if page.page > 1 %}<a class="btn" href="{{ page_url(page.page - 1) }}">Previous</a>{% endif %}
+  <span>Page {{ page.page }} of {{ page.pages }}</span>
+  {% if page.page < page.pages %}<a class="btn" href="{{ page_url(page.page + 1) }}">Next</a>{% endif %}
+</nav></section>
+{% endblock %}

@@ -14,3 +14,7 @@ __pycache__/
 .run_state.json
 feedback.jsonl
 eval_results.json
+runs.db
+runs.db-journal
+report.html
+eval_history.jsonl
