@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 
 import charts
 import config
@@ -14,7 +15,7 @@ ROOT = Path(__file__).parent
 
 
 def render() -> str:
-    env = Environment(loader=FileSystemLoader(ROOT / "templates"), autoescape=select_autoescape(["html"]))
+    env = Environment(loader=FileSystemLoader(ROOT / "templates"), autoescape=True)
     env.filters.update(usd=views.usd, css=views.css, words=views.words, num=views.num, hrs=views.hrs)
     snap = pipeline.snapshot()
     saved = store.list_cases(snap.dataset_name, latest_only=True)
@@ -24,5 +25,5 @@ def render() -> str:
         current = snap.by_id.get(c["shipment_id"])
         c["stale"] = current is None or c["input_hash"] != pipeline.rules_hash(current)
     return env.get_template("report.html").render(
-        css=(ROOT / "static" / "app.css").read_text(encoding="utf-8"), snap=snap, var=snap.var, queue=queue,
+        css=Markup((ROOT / "static" / "app.css").read_text(encoding="utf-8")), snap=snap, var=snap.var, queue=queue,
         state_bar=charts.state_bar(counts), saved=saved)
