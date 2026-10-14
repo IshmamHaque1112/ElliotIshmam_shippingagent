@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_macros.html" import chip %}
+{% block title %}Cases{% endblock %}
+{% block body %}
+<h1>Reported cases</h1><p class="sub">Every saved case file, newest first. A case is saved when you analyze with Claude or save a rules-only case.</p>
+<form class="filters" method="get" action="/cases">
+  <div><label for="status">Disposition</label><select id="status" name="status"><option value="">Any</option>{% for s in statuses %}<option{% if request.args.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+  <div><label for="severity">Severity</label><select id="severity" name="severity"><option value="">Any</option>{% for s in ('HIGH', 'MEDIUM', 'LOW') %}<option{% if request.args.severity == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+  <div><label for="shipment_id">Shipment</label><input id="shipment_id" name="shipment_id" value="{{ request.args.shipment_id or '' }}"></div><button class="primary" type="submit">Apply</button>
+</form>
+<section class="panel"><div class="scroll"><table><thead><tr><th>Case</th><th>Shipment</th><th>State</th><th>Severity</th><th class="num">Exposure</th><th>Narrative</th><th>Run</th><th>Disposition</th><th>Freshness</th><th>Saved</th></tr></thead><tbody>
+{% for c in cases %}<tr><td><a href="/cases/{{ c.id }}">#{{ c.id }}</a></td><td><a href="/shipments/{{ c.shipment_id }}">{{ c.shipment_id }}</a></td><td>{{ chip(c.state) }}</td><td>{% if c.severity %}{{ chip(c.severity) }}{% else %}-{% endif %}</td>
+  <td class="num">{{ c.exposure_usd|usd }}</td><td>{{ chip('fallback' if c.narrative != 'claude' else 'ok', 'fallback' if c.narrative != 'claude' else 'Claude') }}</td><td>{{ chip(c.run_status) }}</td>
+  <td>{{ chip(c.disposition.status) }}</td><td>{{ chip('stale' if c.stale else 'fresh') }}</td><td class="muted">{{ c.created_at }}</td></tr>
+{% else %}<tr><td colspan="10" class="empty">No saved cases yet. Open an exception and choose "Analyze with Claude" or "Save rules-only case".</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

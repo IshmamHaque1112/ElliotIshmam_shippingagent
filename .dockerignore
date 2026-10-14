@@ -1,0 +1,8 @@
+.git
+.venv
+.env
+__pycache__
+runs.db
+eval_results.json
+eval_history.jsonl
+report.html

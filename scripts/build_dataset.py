@@ -8,7 +8,7 @@ recomputes every number and state from the raw data and checks it against the
 declared label. If anything disagrees, the build fails.
 
 Usage:
-    python3 tools/build_dataset.py            # writes ../data and ../holdout, then validates
+    python3 tools/build_dataset.py            # writes ../data, then validates
 
 Everything here is fictional. Carriers, customers, phone numbers (555-01xx),
 addresses and domains (.example) are invented.
@@ -91,7 +91,6 @@ FACILITIES = {
     "PHX-DC": {"name": "Phoenix Delivery Center", "tz": "America/Phoenix", "dwell_baseline_hours": 12},
     "DET-BORDER": {"name": "Detroit Border Crossing", "tz": "America/Detroit", "dwell_baseline_hours": 24},
     "TOR-DC": {"name": "Toronto Delivery Center", "tz": "America/Toronto", "dwell_baseline_hours": 12},
-    "KC-RAMP": {"name": "Kansas City Rail Ramp", "tz": "America/Chicago", "dwell_baseline_hours": 48},
 }
 
 
@@ -376,76 +375,10 @@ def build_dev():
     return S
 
 
-def build_holdout():
-    S = []
-
-    # H-2001 trap: ETA revised EARLIER, high value, perishable -> must NOT be flagged
-    evs = [ev(-40, "WH-ATL", "PICKED_UP", "Picked up"),
-           ev(-5, "ATL-HUB", "DEPARTED", "Departed Atlanta Hub")]
-    S.append(({
-        "shipment_id": "H-2001",
-        "tracking": trk("H-2001", "BWP", "Ground", "WH-ATL", "BOS-DC", "IN_TRANSIT",
-                        zt(22), None, chk(evs[-1]), "In transit"),
-        "timeline": {"events": evs, "eta_history": [{"observed_at": zt(-40), "eta": zt(34)},
-                                                    {"observed_at": zt(-30), "eta": zt(30)},
-                                                    {"observed_at": zt(-10), "eta": zt(22)}]},
-        "order": order("ORD-6001", "Greenfield Dairy Co-op", "VIP_ENTERPRISE", 18000, 300, 9000, zt(30),
-                       downstream="Perishable load; spoils if not delivered within window."),
-    }, dict(scenario="trap_backward_eta_high_value", state="on_track", root_cause=None, accountability=None,
-            acceptable_root_causes=[None], must_not=["flagged because value is high or perishable"])))
-
-    # H-2002 trap: long dwell is NORMAL at a rail ramp (48h baseline)
-    evs = [ev(-60, "WH-DAL", "PICKED_UP", "Picked up"),
-           ev(-40, "KC-RAMP", "ARRIVED", "Arrived at rail ramp - awaiting train consist")]
-    S.append(({
-        "shipment_id": "H-2002",
-        "tracking": trk("H-2002", "ATG", "Intermodal", "WH-DAL", "NWK-HUB", "IN_TRANSIT",
-                        zt(30), None, chk(evs[-1]), "Kansas City, MO"),
-        "timeline": {"events": evs, "eta_history": [{"observed_at": zt(-60), "eta": zt(30)}]},
-        "order": order("ORD-6002", "Ironbridge Tools", "STANDARD", 11000, 120, 3300, zt(50)),
-    }, dict(scenario="trap_facility_specific_baseline", state="on_track", root_cause=None,
-            accountability=None, acceptable_root_causes=[None],
-            must_not=["flagged as stalled using a generic 12h baseline"])))
-
-    # H-2003 date-only promise (rule: 17:00 local at destination), delayed
-    evs = [ev(-30, "WH-DAL", "PICKED_UP", "Picked up"),
-           ev(-8, "MEM-HUB", "DEPARTED", "Departed Memphis Hub")]
-    S.append(({
-        "shipment_id": "H-2003",
-        "tracking": trk("H-2003", "MRX", "Express", "WH-DAL", "DEN-HUB", "IN_TRANSIT",
-                        zt(15), None, chk(evs[-1]), "In transit"),
-        "timeline": {"events": evs, "eta_history": [{"observed_at": zt(-30), "eta": zt(8)},
-                                                    {"observed_at": zt(-6), "eta": zt(15)}]},
-        "order": order("ORD-6003", "Alderwood Cabinetry", "STANDARD", 5600, 75, 1680, "2026-10-08",
-                       promise_key="promise_date"),
-    }, dict(scenario="date_only_promise", state="delayed", root_cause="Unknown",
-            accountability="Undetermined", acceptable_root_causes=["Unknown", "Carrier Capacity"],
-            must_include=["promise resolved to 17:00 Denver time"], must_not=[])))
-
-    # H-2004 malformed tracking response -> unable_to_verify
-    evs = [ev(-20, "WH-DET", "PICKED_UP", "Picked up")]
-    S.append(({
-        "shipment_id": "H-2004",
-        "tracking": trk("H-2004", "ATG", "Ground", "WH-DET", "BOS-DC", "IN_TRANSIT",
-                        zt(40), None, chk(evs[-1]), "Detroit, MI"),
-        "timeline": {"events": evs, "eta_history": [{"observed_at": zt(-20), "eta": zt(40)}]},
-        "order": order("ORD-6004", "Fenwick Stationers", "STANDARD", 2200, 20, 440, zt(50)),
-    }, dict(scenario="tracking_malformed_json", state="unable_to_verify", root_cause=None,
-            accountability=None, acceptable_root_causes=[None],
-            must_not=["says on_track", "guesses fields from the broken response"],
-            fault_note="get_tracking_status returns truncated JSON on every attempt")))
-    return S
-
-
 FAULTS_DEV = {
     "SH-1005": {"event_timeline": {"fault": "http_429", "times": 2}},
     "SH-1010": {"get_tracking_status": {"fault": "http_503", "times": "always"}},
 }
-FAULTS_HOLDOUT = {
-    "H-2004": {"get_tracking_status": {"fault": "malformed_json", "times": "always"}},
-}
-
-
 # --------------------------------------------------------------------------
 # Reference rules (used only to validate the dataset and to fill label metrics)
 # --------------------------------------------------------------------------
@@ -680,8 +613,7 @@ def main():
             "disclaimer": "All carriers, customers, people, addresses and contact details are fictional."}
     ok = True
     for name, builder, faults, split, ddir, prefix in (
-            ("dev", build_dev, FAULTS_DEV, "dev", "data", ""),
-            ("holdout", build_holdout, FAULTS_HOLDOUT, "holdout", "holdout", "holdout_")):
+            ("dev", build_dev, FAULTS_DEV, "dev", "data", ""),):
         scen = builder()
         shipments = [s for s, _ in scen]
         labels, queue = make_labels(scen, faults, split)

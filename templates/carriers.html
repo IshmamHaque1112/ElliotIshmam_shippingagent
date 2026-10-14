@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Carriers{% endblock %}
+{% block body %}
+<h1>Carrier scorecard</h1><p class="sub">Computed by code from the rules output and saved cases. Small samples: read as a demo, not as carrier performance.</p>
+<section class="panel"><h2>Exception rate</h2>{{ chart }}</section>
+<section class="panel"><div class="scroll"><table><thead><tr><th>Carrier</th><th class="num">Shipments</th><th class="num">Exceptions</th><th class="num">Rate</th><th class="num">Delivered late</th><th class="num">Exposure</th><th class="num">Avg dwell ÷ baseline</th><th class="num">Cases</th><th class="num">Fallbacks</th></tr></thead><tbody>
+{% for s in stats %}<tr><td>{{ s.name }}</td><td class="num">{{ s.shipments }}</td><td class="num">{{ s.exceptions }}</td><td class="num">{{ "%.0f"|format(s.exception_rate * 100) }}%</td><td class="num">{{ s.delivered_late }}</td><td class="num">{{ s.exposure_usd|usd }}</td>
+  <td class="num">{{ s.avg_dwell_ratio|num(2) }}</td><td class="num">{{ s.cases }}</td><td class="num">{{ s.fallbacks }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

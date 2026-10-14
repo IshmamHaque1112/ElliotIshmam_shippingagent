@@ -1,0 +1,21 @@
+{
+  "_comment": "Faults injected by the mock service. 'times': N failures then success, or 'always'.",
+  "SH-3003": {
+    "get_tracking_status": {
+      "fault": "http_503",
+      "times": "always"
+    }
+  },
+  "SH-3005": {
+    "event_timeline": {
+      "fault": "malformed_json",
+      "times": "always"
+    }
+  },
+  "SH-3029": {
+    "event_timeline": {
+      "fault": "malformed_json",
+      "times": "always"
+    }
+  }
+}

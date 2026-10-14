@@ -1,0 +1,9 @@
+{% macro chip(value, label=None) -%}<span class="chip {{ value|css }}">{{ (label or value)|words }}</span>{%- endmacro %}
+{% macro analyze_button(shipment_id, label="Analyze with Claude") -%}
+<form class="inline" method="post" action="/case/{{ shipment_id }}/analyze" data-confirm="This sends the case to Anthropic and uses API credits. Continue?">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="primary" type="submit">{{ label }}</button>
+</form>
+{%- endmacro %}
+{% macro case_chip(entry) -%}
+{% if entry %}<a href="/cases/{{ entry.id }}">{{ chip('fresh' if entry.fresh else 'stale') }}</a> {{ chip('fallback' if entry.narrative != 'claude' else 'ok', 'fallback' if entry.narrative != 'claude' else 'Claude') }}{% else %}<span class="muted">none</span>{% endif %}
+{%- endmacro %}

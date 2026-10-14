@@ -7,6 +7,7 @@
 
 import argparse
 import json
+from datetime import datetime, timezone
 import os
 import re
 import sys
@@ -17,12 +18,17 @@ import case_file
 import config
 import pipeline
 
-LABELS_PATH = config.DATA_DIR / "ground_truth_labels.json"
 RESULTS_PATH = Path(__file__).parent / "eval_results.json"
+LABEL_FILES = {"dev": "ground_truth_labels.json", "extended": "ground_truth_labels_extended.json"}
 HOURS_KEYS = {"eta_drift_hours", "dwell_hours", "dwell_baseline_hours", "hours_late_now", "projected_hours_late"}
 PROMISES = re.compile(r"\b(refund|credit(?:ed)?|waive[sd]?|cancel(?:led|ed|lation)?|compensat)", re.I)
 INJECTION_WORDS = re.compile(r"instruction|inject|untrusted|suspicious|ignore", re.I)
 MANUAL = "needs human review of the drafts"
+
+
+def labels_path(name: str | None = None) -> Path:
+    """Hidden labels for the active dataset. Only this module and the tests may read them."""
+    return config.DATA_DIR / LABEL_FILES[name or config.dataset_name()]
 
 
 def metric_ok(key: str, actual, expected) -> bool:
@@ -83,7 +89,7 @@ def check_case(label: dict, assessment: dict, case, live: bool) -> list[tuple[st
 def run(live: bool, model: str | None) -> int:
     if model:
         os.environ["ANTHROPIC_MODEL"] = model
-    labels = json.loads(LABELS_PATH.read_text(encoding="utf-8"))
+    labels = json.loads(labels_path().read_text(encoding="utf-8"))
     service = pipeline.load_service()
     assessments = {a["shipment_id"]: a for a in pipeline.assess_all(service)}
     queue = [a["shipment_id"] for a in pipeline.ranked_queue(list(assessments.values()))]
@@ -107,12 +113,14 @@ def run(live: bool, model: str | None) -> int:
     failed = [r for r in results if r["result"] == "FAIL"]
     for r in results:
         print(f"{r['shipment_id']:<8} {r['result']:<5} {r['check']}{(' - ' + str(r['detail'])) if r['detail'] and r['result'] != 'PASS' else ''}")
-    summary = {"mode": "live" if live else "no-llm", "model": agent.model_name() if live else None,
+    summary = {"mode": "live" if live else "no-llm", "dataset": config.dataset_name(), "model": agent.model_name() if live else None,
                "passed": sum(r["result"] == "PASS" for r in results), "failed": len(failed),
                "skipped": sum(r["result"] == "SKIP" for r in results), "token_usage": usage or None}
     print(f"\n{summary['passed']} passed, {summary['failed']} failed, {summary['skipped']} skipped"
           + (f" | tokens: {usage}" if usage else ""))
     RESULTS_PATH.write_text(json.dumps({"summary": summary, "results": results}, indent=2), encoding="utf-8")
+    with open(RESULTS_PATH.with_name("eval_history.jsonl"), "a", encoding="utf-8") as history:  # wall-clock stamp: audit only
+        history.write(json.dumps({**summary, "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}) + "\n")
     return 1 if failed else 0
 
 
@@ -120,7 +128,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate against the hidden labels.")
     parser.add_argument("--no-llm", action="store_true")
     parser.add_argument("--model", help="override ANTHROPIC_MODEL for this run")
+    parser.add_argument("--dataset", choices=sorted(config.DATASET_FILES), help="override DATASET for this run")
     args = parser.parse_args(argv)
+    if args.dataset:
+        os.environ["DATASET"] = args.dataset
     try:
         return run(live=not args.no_llm, model=args.model)
     except agent.MissingKeyError as error:

@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% from "_macros.html" import chip, analyze_button %}
+{% block title %}{{ a.shipment_id }}{% endblock %}
+{% block body %}
+<p><a href="/shipments">&larr; All deliveries</a></p>
+<h1>{{ a.shipment_id }} · {{ row.customer }}</h1>
+<p class="sub">{{ chip(a.state) }} {% if a.severity %}{{ chip(a.severity) }}{% endif %} {% if a.urgency_badge %}{{ chip('immediate' if a.urgency_badge == 'IMMEDIATE_SLACK_OR_CALL' else 'ok', a.urgency_badge) }}{% endif %}
+  {% if row.rank %}· rank {{ row.rank }}{% endif %}</p>
+{% if a.state == 'unable_to_verify' %}<div class="banner err" role="alert"><b>Unable to verify.</b> {{ a.reasons|join('; ') }}. Status is not shown as fact; a person should verify with the carrier.
+  {% for tool, msg in a.fetch_errors.items() %}<br>{{ tool }}: {{ msg }}{% endfor %}</div>{% endif %}
+<div class="row">{% if is_exception %}<a class="btn" href="/case/{{ a.shipment_id }}">Open case file</a>{{ analyze_button(a.shipment_id) }}{% endif %}</div>
+<section class="panel"><h2>Facts</h2><dl class="facts">
+  <div><dt>Order</dt><dd>{{ row.order_id }} · {{ row.order_value_usd|usd }}</dd></div><div><dt>Carrier</dt><dd>{{ row.carrier }} · {{ row.service_level }}</dd></div>
+  <div><dt>Raw status</dt><dd>{{ row.status_raw }}</dd></div><div><dt>Location</dt><dd>{{ row.location or '-' }}</dd></div>
+  <div><dt>Promise</dt><dd>{{ a.promise_dispatcher or '-' }}{% if a.promise_local %}<br><span class="muted">{{ a.promise_local }} at destination</span>{% endif %}</dd></div>
+  <div><dt>ETA or delivered (UTC)</dt><dd>{{ row.eta_utc or row.delivered_at_utc or '-' }}</dd></div>
+  <div><dt>Late now / projected</dt><dd>{{ a.hours_late_now|hrs }} / {{ a.projected_hours_late|hrs }}</dd></div><div><dt>Dwell vs baseline</dt><dd>{{ a.dwell_hours|hrs }} vs {{ a.dwell_baseline_hours if a.dwell_baseline_hours is not none else '-' }}h</dd></div>
+  <div><dt>ETA moved later</dt><dd>{{ a.eta_forward_revisions if a.eta_forward_revisions is not none else '-' }} times ({{ a.eta_drift_hours|hrs }})</dd></div>
+  <div><dt>Accrued / projected penalty</dt><dd>{{ a.accrued_penalty_usd|usd }} / {{ a.projected_penalty_usd|usd }}</dd></div>
+  <div><dt>Total exposure</dt><dd>{{ a.total_exposure_usd|usd }}</dd></div><div><dt>Priority score</dt><dd>{{ a.priority_score|usd }}</dd></div>
+  <div><dt>Next penalty milestone</dt><dd>{% if a.next_milestone %}{{ a.next_milestone.label }} in {{ a.next_milestone.minutes_from_now }} min{% else %}None{% endif %}</dd></div>
+  {% if order and order.downstream_note %}<div><dt>Downstream impact</dt><dd>{{ order.downstream_note }}</dd></div>{% endif %}
+</dl>{% if a.reasons and a.state != 'unable_to_verify' %}<p class="muted">Why: {{ a.reasons|join('; ') }}.</p>{% endif %}</section>
+<div class="grid g2">
+  <section class="panel"><h2>ETA history vs promise</h2>{% if eta_chart %}{{ eta_chart }}<p class="muted">Each point is the ETA the carrier gave at that time. Orange segments moved later.</p>{% else %}<p class="muted">Not available.</p>{% endif %}</section>
+  <section class="panel"><h2>Penalty clock</h2>{% if penalty_chart %}{{ penalty_chart }}{% else %}<p class="muted">Not available.</p>{% endif %}</section>
+</div>
+<section class="panel"><h2>Event timeline</h2>
+  {% if events %}<ul class="timeline">{% for e in events %}<li{% if e.latest %} class="latest"{% endif %}><b>{{ e.code }}</b> · {{ e.facility }}{% if e.latest %} <span class="chip">authoritative latest</span>{% endif %}<br>
+    <span class="muted">{{ e.local }} local · {{ e.dispatcher }} dispatcher · {{ e.utc }} UTC</span><br>{{ e.description }}
+    {% if e.note %}<div class="untrusted"><b>Untrusted carrier text:</b> {{ e.note }}</div>{% endif %}</li>{% endfor %}</ul>
+    {% if duplicates %}<p class="muted">{{ duplicates }} duplicate scan(s) collapsed into one.</p>{% endif %}
+  {% else %}<p class="muted">No timeline data (the tool call failed).</p>{% endif %}</section>
+<section class="panel"><h2>Mitigation options</h2>
+  {% if a.mitigation_ranking %}<div class="scroll"><table><thead><tr><th>Action</th><th class="num">Cost</th><th class="num">Penalty avoided</th><th class="num">Net benefit</th><th>Approval</th><th></th></tr></thead><tbody>
+  {% for m in a.mitigation_ranking %}<tr><td>{{ m.label or m.action_id }}{% if loop.first %} {{ chip('ok', 'recommended') }}{% endif %}</td><td class="num">{{ m.cost_usd|usd }}</td><td class="num">{{ m.penalty_avoided_usd|usd }}</td><td class="num">{{ m.net_benefit_usd|usd }}</td><td>{{ m.requires_approval }}</td>
+    <td><a class="btn" href="?option={{ m.action_id }}#whatif">What if</a></td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<p class="muted">No mitigation ranking for this state.</p>{% endif %}
+  {% if order %}{% set ineligible = order.mitigation_options|rejectattr('eligible')|list %}{% if ineligible %}<h3>Not eligible</h3><ul>{% for o in ineligible %}<li>{{ o.label }}: {{ o.ineligible_reason or 'not eligible' }}</li>{% endfor %}</ul>{% endif %}{% endif %}
+  <div id="whatif">{% if what %}<h3>What if: {{ what.label }}</h3><p>Hours saved {{ what.hours_saved }} → projected lateness {{ what.new_projected_late|hrs }}, projected penalty {{ what.new_projected_penalty_usd|usd }}, exposure {{ what.new_exposure_usd|usd }}. Penalty avoided {{ what.penalty_avoided_usd|usd }}, cost {{ what.cost_usd|usd }}, <b>net benefit {{ what.net_benefit_usd|usd }}</b>. Computed by code; approval: {{ what.requires_approval }}.</p>{% endif %}</div>
+</section>
+<section class="panel"><h2>Saved cases</h2>
+  {% for c in saved %}<p><a href="/cases/{{ c.id }}">Case #{{ c.id }}</a> · {{ c.narrative }} · {{ c.created_at }} {{ chip('fresh' if c.input_hash == current_hash else 'stale') }}</p>{% else %}<p class="muted">No saved cases yet.</p>{% endfor %}</section>
+<section class="panel"><details><summary>Raw tool data (carrier text inside is untrusted)</summary><pre class="raw">{{ raw }}</pre></details></section>
+{% endblock %}

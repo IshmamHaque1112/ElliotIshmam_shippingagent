@@ -9,13 +9,13 @@ import config
 TOOL_NAMES = ("get_tracking_status", "order_context", "event_timeline")
 
 
-def load_dataset(path=config.DATASET_PATH) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as handle:
+def load_dataset(path=None) -> dict[str, Any]:
+    with open(path or config.dataset_path(), encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def load_fault_schedule(path=config.FAULT_SCHEDULE_PATH) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as handle:
+def load_fault_schedule(path=None) -> dict[str, Any]:
+    with open(path or config.fault_schedule_path(), encoding="utf-8") as handle:
         return {k: v for k, v in json.load(handle).items() if not k.startswith("_")}
 
 

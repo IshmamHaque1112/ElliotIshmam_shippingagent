@@ -238,6 +238,21 @@ def _rank_mitigations(order: dict[str, Any], projected_late: float) -> list[dict
     return ranking
 
 
+def what_if(order: dict[str, Any], projected_late: float, action_id: str) -> dict[str, Any] | None:
+    """Recompute lateness, penalty and net benefit if one eligible mitigation option is taken (pure code)."""
+    for option in order["mitigation_options"]:
+        if option["action_id"] == action_id and option["eligible"]:
+            new_late = max(0.0, projected_late - option["hours_saved"])
+            before, after = penalty(order, projected_late), penalty(order, new_late)
+            return {"action_id": action_id, "label": option.get("label"), "cost_usd": option["cost_usd"],
+                    "hours_saved": option["hours_saved"], "new_projected_late": round(new_late, 2),
+                    "new_projected_penalty_usd": round(after, 2), "penalty_avoided_usd": round(before - after, 2),
+                    "net_benefit_usd": round(before - after - option["cost_usd"], 2),
+                    "new_exposure_usd": round(order["order_value_usd"] + after, 2),
+                    "requires_approval": option.get("requires_approval")}
+    return None
+
+
 def _rounded(out: dict[str, Any]) -> dict[str, Any]:
     for key, value in list(out.items()):
         if isinstance(value, float):
