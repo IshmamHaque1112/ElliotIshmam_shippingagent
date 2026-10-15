@@ -233,7 +233,7 @@ The first two scenarios demonstrate AI classification. The remaining scenarios d
 
 The expected AI classifications describe the intended demonstration outcomes, not a guarantee that every model response will be correct.
 
-## Scope and Limitations
+## Out of Scope and Limitations
 
 The current demonstration:
 
