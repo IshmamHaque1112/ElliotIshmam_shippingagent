@@ -16,7 +16,7 @@ feedback.jsonl
 eval_results.json
 runs.db
 runs.db-journal
-report.html
+/report.html
 eval_history.jsonl
 
 # Private hold-out evals (never commit)
