@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% from "_macros.html" import chip, case_chip %}
+{% block title %}{{ inc.id }} · Incident{% endblock %}
+{% block body %}
+<p><a href="/">&larr; Dashboard</a></p>
+<h1>{{ inc.title }}</h1>
+<p class="sub">{{ inc.id }} · {{ chip(inc.kind) }} · {{ inc.size }} shipments · {{ inc.carriers|join(', ') }}</p>
+<section class="cards" aria-label="Incident totals">
+  <div class="card"><span>Total exposure</span><strong>{{ inc.exposure_usd|usd }}</strong></div>
+  <div class="card"><span>Shipments</span><strong>{{ inc.size }}</strong></div>
+  <div class="card"><span>First / last scan (UTC)</span><strong class="small">{{ inc.first_scan_utc }}<br>{{ inc.last_scan_utc }}</strong></div>
+</section>
+<section class="panel"><h2>Recommended escalation</h2><p><b>{{ inc.recommendation }}</b></p>
+  <p class="muted">Why these are grouped: {{ inc.why }} This is a suggestion for a person; nothing is sent.</p>
+  {% if inc.carrier_note %}<p class="muted">Carrier note (untrusted text, shown for reference): {{ inc.carrier_note }}</p>{% endif %}</section>
+<section class="panel"><h2>Member shipments</h2>
+  <div class="scroll"><table><thead><tr><th>Shipment</th><th>State</th><th>Last scan</th><th class="num">Dwell / baseline</th><th>Carrier</th><th class="num">Exposure</th><th>Claude case</th></tr></thead><tbody>
+  {% for m in inc.members %}<tr><td><a href="/shipments/{{ m.shipment_id }}">{{ m.shipment_id }}</a></td><td>{{ chip(m.state) }}</td>
+    <td>{{ m.facility }} {{ m.code }}<br><span class="muted">{{ m.last_ts }}</span></td><td class="num">{{ m.dwell_hours|hrs }} / {{ m.baseline_hours }}h</td><td>{{ m.carrier }}</td>
+    <td class="num">{{ m.exposure_usd|usd }}</td><td>{{ case_chip(status.get(m.shipment_id)) }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

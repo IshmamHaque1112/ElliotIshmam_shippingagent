@@ -10,7 +10,36 @@
   <p class="muted">Case #{{ saved.id }} · saved {{ saved.created_at }} · simulated time {{ saved.sim_now_utc }} · model {{ saved.model or 'none' }}</p>
 {% endif %}
 {% include "_case_body.html" %}
+<section class="panel" id="playbook"><h2>Playbook: {{ playbook_name }}</h2>
+  <p class="muted">Fixed checklist for a human dispatcher ({{ 'matched to the Claude root cause' if playbook_name != 'Generic' else 'generic: no Claude root cause on this case' }}). Ticks are saved as history; nothing is sent.</p>
+  {% if live %}<ol>{% for st in playbook_steps %}<li>{{ st.text }}</li>{% endfor %}</ol><p class="muted">Save the case to tick steps off.</p>
+  {% else %}<form method="post" action="/cases/{{ saved.id }}/playbook"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <ul class="checks">{% for st in playbook_steps %}<li><label><input type="checkbox" name="done" value="{{ st.id }}"{% if ticks.get(st.id) %} checked{% endif %}> {{ st.text }}</label></li>{% endfor %}</ul>
+    <button type="submit">Save checklist</button></form>{% endif %}</section>
 {% if not live %}
+{% if trace %}<section class="panel"><h2>Agent trace</h2>
+  <details><summary>{{ trace.tool_calls }} tool call{{ '' if trace.tool_calls == 1 else 's' }} · {{ trace.attempts|length }} attempt{{ '' if trace.attempts|length == 1 else 's' }} · result: {{ trace.final|words }}</summary>
+  <p class="muted">Tool results can contain carrier text. It is untrusted data: shown escaped and truncated, never treated as an instruction.</p>
+  {% for at in trace.attempts %}<h3>Attempt {{ at.attempt }} · {{ chip(at.outcome) }}{% if at.kind %} <span class="muted">{{ at.kind|words }}</span>{% endif %}</h3>
+    {% if at.reason %}<p>Why: {{ at.reason }}</p>{% endif %}
+    <p class="muted">Submission {{ 'received' if at.submitted else 'not received' }}.</p>
+    {% if at.calls %}<ol class="trace">{% for c in at.calls %}<li><b>{{ c.tool }}</b> {{ chip(c.outcome) }}{% if c.refused %} <span class="muted">refused</span>{% endif %}<br>
+      <span class="muted">args:</span> <code>{{ c.arguments }}</code><br><span class="muted">result:</span> <code>{{ c.summary }}</code></li>{% endfor %}</ol>
+    {% else %}<p class="muted">No tool calls in this attempt.</p>{% endif %}
+  {% endfor %}
+  {% if trace.error %}<p>Error: {{ trace.error }}</p>{% endif %}</details></section>
+{% elif saved.model %}<section class="panel"><h2>Agent trace</h2><p class="muted">No trace was recorded for this case (saved before traces existed).</p></section>{% endif %}
+{% if approval %}<section class="panel" id="approval"><h2>Approval request · {{ approval.role_label }}</h2>
+  <p class="muted">This action needs approval from the {{ approval.role_label|lower }}. The request below is text for a person to send; this system sends nothing. Figures come from code.</p>
+  {% if approval.current %}<p>Status: {{ chip(approval.current.status) }}{% if approval.current.actor %} · {{ approval.current.actor }}{% endif %}</p>
+    <label for="apdraft">Draft</label><textarea id="apdraft" readonly rows="14">{{ approval.current.draft }}</textarea><p><button type="button" data-copy="apdraft">Copy</button></p>
+    {% if approval.history|length > 1 %}<details><summary>Status history ({{ approval.history|length }})</summary><ul>{% for h in approval.history %}<li>{{ h.created_at }} · {{ h.status }} · {{ h.actor or '-' }} · {{ h.note or '' }}</li>{% endfor %}</ul></details>{% endif %}
+  {% else %}<p class="muted">No request drafted yet.</p>{% endif %}
+  {% if approval.next %}<form class="filters" method="post" action="/cases/{{ saved.id }}/approval"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div><label for="apstatus">{{ 'Next step' if approval.current else 'Start' }}</label><select id="apstatus" name="status">{% for n in approval.next %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select></div>
+    <div><label for="apactor">Who</label><input id="apactor" name="actor" maxlength="80"></div><div><label for="apnote">Note</label><input id="apnote" name="note" maxlength="1000"></div>
+    <button class="primary" type="submit">Save</button></form>
+    <p class="muted">Statuses record what a person did outside this app (drafted, requested, approved, declined).</p>{% endif %}</section>{% endif %}
 <section class="panel"><h2>Disposition</h2><p>Current: {{ chip(saved.disposition.status) }} {% if saved.disposition.owner %}· {{ saved.disposition.owner }}{% endif %} {% if saved.disposition.note %}· {{ saved.disposition.note }}{% endif %}</p>
   <form class="filters" method="post" action="/cases/{{ saved.id }}/disposition"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div><label for="status">Status</label><select id="status" name="status">{% for s in statuses %}<option{% if s == saved.disposition.status %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>

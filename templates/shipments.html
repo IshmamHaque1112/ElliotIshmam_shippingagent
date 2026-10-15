@@ -14,7 +14,7 @@
 </form>
 <section class="panel"><div class="scroll"><table><thead><tr><th>Shipment</th><th>Customer</th><th>Carrier</th><th>State</th><th>Severity</th><th class="num">Exposure</th><th>Promise (dispatcher time)</th><th>Rank</th><th>Claude case</th></tr></thead><tbody>
 {% for r in page['items'] %}<tr><td><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a><br><span class="muted">{{ r.order_id }}</span></td><td>{{ r.customer }}<br><span class="muted">{{ r.tier|words }}</span></td><td>{{ r.carrier }}</td>
-  <td>{{ chip(r.state) }}</td><td>{% if r.severity %}{{ chip(r.severity) }}{% else %}-{% endif %}</td><td class="num">{{ r.exposure_usd|usd }}</td><td>{{ r.promise_dispatcher }}</td><td>{{ r.rank or '-' }}</td><td>{{ case_chip(status.get(r.shipment_id)) }}</td></tr>
+  <td>{{ chip(r.state) }}{% if snap.watch.get(r.shipment_id) %} {{ chip('watch') }}{% endif %}</td><td>{% if r.severity %}{{ chip(r.severity) }}{% else %}-{% endif %}</td><td class="num">{{ r.exposure_usd|usd }}</td><td>{{ r.promise_dispatcher }}</td><td>{{ r.rank or '-' }}</td><td>{{ case_chip(status.get(r.shipment_id)) }}</td></tr>
 {% else %}<tr><td colspan="9" class="empty">No shipments match these filters.</td></tr>{% endfor %}</tbody></table></div>
 <nav class="pager" aria-label="Pages">
   {% if page.page > 1 %}<a class="btn" href="{{ page_url(page.page - 1) }}">Previous</a>{% endif %}

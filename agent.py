@@ -7,6 +7,7 @@ from typing import Any
 import config
 import fetch as fetch_module
 import prompt
+import agent_trace as trace_module
 from api_errors import MissingKeyError
 from mock_service import MockService
 
@@ -40,11 +41,12 @@ def _blocks(response) -> list:
 
 def investigate(
     client, service: MockService, assessment: dict[str, Any], hint: str | None = None, sleep=None,
-    usage: dict[str, int] | None = None,
+    usage: dict[str, int] | None = None, calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Run the loop and return the raw submit_case_analysis input (validated later by case_file).
 
     If `usage` is given, token counts are added to it (used by the eval to compare models' cost).
+    If `calls` is given, one trace entry per tool call is appended to it (see trace.py).
     """
     shipment_id = assessment["shipment_id"]
     tool_specs = prompt.read_tool_specs() + [prompt.submit_tool_spec()]
@@ -94,6 +96,8 @@ def investigate(
                 if usage is not None:
                     usage["tool_calls"] = usage.get("tool_calls", 0) + 1
                 content = fetch_module.fetch(service, use.name, shipment_id, **kwargs).as_tool_content()
+            if calls is not None:
+                calls.append(trace_module.call_entry(use.name, use.input, content))
             results.append({"type": "tool_result", "tool_use_id": use.id, "content": json.dumps(content)})
         messages += [{"role": "assistant", "content": response.content}, {"role": "user", "content": results}]
 

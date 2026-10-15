@@ -11,7 +11,7 @@ from helpers import FakeClient, basic, good_submission, reply, submit_client, us
 import prompt
 
 PAGES = ["/", "/shipments", "/queue", "/queue.csv", "/cases", "/runs", "/eval", "/carriers", "/digest", "/simulate",
-         "/shipments/SH-1004", "/shipments/SH-1001", "/shipments/SH-1010", "/shipments/SH-1011", "/case/SH-1004", "/case/SH-1010"]
+         "/handoff", "/shipments/SH-1004", "/shipments/SH-1001", "/shipments/SH-1010", "/shipments/SH-1011", "/case/SH-1004", "/case/SH-1010"]
 
 
 def client():

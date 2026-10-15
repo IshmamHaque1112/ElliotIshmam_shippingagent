@@ -43,6 +43,31 @@ def penalty(order: dict[str, Any], hours_late: float) -> float:
     return min(amount, order["penalty_cap_usd"])
 
 
+def penalty_steps(order: dict[str, Any], hours_late: float) -> dict[str, Any]:
+    """The same arithmetic as penalty(), written out step by step for a claim. `total` always equals penalty()."""
+    grace, rate = order["penalty_grace_hours"], order["sla_penalty_per_hour_usd"]
+    esc, cap = order.get("penalty_escalation"), order["penalty_cap_usd"]
+    steps: list[dict[str, Any]] = []
+    if hours_late <= 0:
+        return {"steps": steps, "uncapped_usd": 0.0, "cap_usd": cap, "cap_applied": False, "total_usd": 0.0}
+    steps.append({"label": "Hours late", "detail": f"{hours_late:.2f} h after the promise", "amount_usd": None})
+    steps.append({"label": "Grace period", "detail": f"first {grace:g} h are free", "amount_usd": None})
+    if esc:
+        after = esc["after_hours_late"]
+        base_h, esc_h = max(0.0, min(hours_late, after) - grace), max(0.0, hours_late - after)
+        base_amount, esc_amount = rate * base_h, rate * esc["multiplier"] * esc_h
+        steps.append({"label": "Base rate", "detail": f"{base_h:.2f} h x ${rate:,.2f}/h", "amount_usd": round(base_amount, 2)})
+        steps.append({"label": "Escalated rate", "detail": f"{esc_h:.2f} h x ${rate:,.2f}/h x {esc['multiplier']:g} (after {after:g} h late)", "amount_usd": round(esc_amount, 2)})
+        uncapped = base_amount + esc_amount
+    else:
+        billable = max(0.0, hours_late - grace)
+        uncapped = rate * billable
+        steps.append({"label": "Rate", "detail": f"{billable:.2f} h x ${rate:,.2f}/h", "amount_usd": round(uncapped, 2)})
+    total = min(uncapped, cap)
+    steps.append({"label": "Cap", "detail": f"capped at ${cap:,.2f}" if uncapped > cap else f"under the ${cap:,.2f} cap", "amount_usd": None})
+    return {"steps": steps, "uncapped_usd": round(uncapped, 2), "cap_usd": cap, "cap_applied": uncapped > cap, "total_usd": round(total, 2)}
+
+
 def resolve_promise(order: dict[str, Any], dest_tz: str) -> datetime:
     if order.get("promise_datetime_utc"):
         return parse_ts(order["promise_datetime_utc"])
@@ -185,7 +210,7 @@ def _unable_to_verify(out: dict[str, Any], order: dict[str, Any] | None, problem
     out["reasons"] = problems
     out["recommended_action_id"] = "MANUAL_VERIFY"
     value = order.get("order_value_usd") if isinstance(order, dict) else None
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:  # a zero or negative value is itself a data problem
         multiplier = config.VIP_MULTIPLIER if order.get("customer_tier") == config.VIP_TIER else 1.0
         out["total_exposure_usd"], out["priority_score"] = float(value), value * multiplier
         out["severity"] = severity_for(value)

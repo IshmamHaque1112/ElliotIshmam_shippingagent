@@ -1,6 +1,7 @@
 """Generate a larger, seeded, fully labeled fictional dataset (60 shipments) for the dashboard.
 
-    python scripts/generate_bulk.py [output_root]
+    python scripts/generate_bulk.py [output_root]          the 60-shipment extended set
+    python scripts/generate_bulk.py --edge [output_root]   the 9-shipment edge set (multi-leg, conflicting and bad data)
 
 Reuses the reference rules and validator in build_dataset.py. Every generated shipment is labeled by the
 reference rules AND checked against the state the scenario was designed to produce; a design mismatch is
@@ -296,7 +297,94 @@ def build(seed=SEED):
     return scen, faults
 
 
+# ---------------------------------------------------------------- edge set: multi-leg, conflicting and bad data
+def _edge_shipment(sid, carrier, route, evs, hist, eta, delivered, od, status="IN_TRANSIT", last=None, location=""):
+    wh, _hub, _mid, dest, _city = route
+    return {"shipment_id": sid,
+            "tracking": bd.trk(sid, carrier, "Freight", wh, dest, status, eta, delivered, bd.chk(last or evs[-1]), location),
+            "timeline": {"events": evs, "eta_history": hist}, "order": od}
+
+
+def build_edge():
+    """Nine hand-designed shipments. Every one is labeled by the reference rules and must land in the state designed."""
+    route = ROUTES[0]  # WH-ATL -> ATL-HUB -> CHI-HUB -> SEA-DC
+    wh, hub, mid, dest, city = route
+    ship_to = f"100 Depot St, {city}"
+
+    def order(n, value=9000, rate=100, cap=2000, grace=0, promise_h=10, **kw):
+        o = bd.order(f"ORD-{7000 + n}", f"Edge Case {n} Supply", "STANDARD", value, rate, cap, zt(promise_h), grace, None, ship_to=ship_to)
+        o.update(kw)
+        return o
+
+    def leg(h, fac, code, desc, carrier):
+        e = bd.ev(h, fac, code, desc)
+        e["carrier_id"] = carrier
+        return e
+
+    hist = lambda eta: [{"observed_at": zt(-50), "eta": zt(eta - 6)}, {"observed_at": zt(-20), "eta": zt(eta)}]
+    scen = []
+
+    def add(sh, scenario, why, state="unable_to_verify", must_include=None, must_not=None):
+        scen.append((sh, {"scenario": scenario, "state": state, "root_cause": None, "acceptable_root_causes": [None],
+                          "accountability": None, "must_include": must_include or [], "must_not": must_not or ["says on_track", "invents a status"],
+                          "design_note": why}))
+
+    # 1. Two carriers, consistent: the latest scan and the tracking record agree on the current carrier.
+    evs = [leg(-60, wh, "PICKED_UP", "Picked up", "NLF"), leg(-48, hub, "DEPARTED", "Departed Atlanta Hub", "NLF"),
+           leg(-30, mid, "ARRIVED", "Arrived at Chicago Hub (handoff to second carrier)", "ATG")]
+    add(_edge_shipment("SH-4001", "ATG", route, evs, hist(48), zt(48), None, order(1), location="Chicago Hub"), "multi_leg_consistent",
+        "two carriers, tracking and latest scan agree: processed normally", state="delayed", must_not=["says on_track", "blames the first carrier without evidence"])
+    # 2. Two carriers, conflicting: tracking still names the first carrier, the latest scan is from the second.
+    evs2 = [dict(e) for e in evs]
+    add(_edge_shipment("SH-4002", "NLF", route, evs2, hist(48), zt(48), None, order(2), location="Chicago Hub"), "multi_leg_carrier_conflict",
+        "tracking and latest scan name different carriers: unable_to_verify", must_include=["says the carriers disagree"])
+    # 3. Tracking shows a checkpoint 18 h newer than the timeline's latest event.
+    evs3 = [bd.ev(-60, wh, "PICKED_UP", "Picked up"), bd.ev(-48, hub, "DEPARTED", "Departed Atlanta Hub"), bd.ev(-24, mid, "DEPARTED", "Departed Chicago Hub")]
+    newer = bd.chk(bd.ev(-6, "DEN-HUB", "ARRIVED", "Arrived at Denver Hub"))
+    add(_edge_shipment("SH-4003", "NLF", route, evs3, hist(40), zt(40), None, order(3, promise_h=60), last=newer, location="Denver Hub"),
+        "tracking_newer_than_timeline", "tracking checkpoint newer than the timeline: unable_to_verify", must_include=["says the timeline may be missing scans"])
+    # 4. Tracking says delivered, the timeline has no DELIVERED event.
+    add(_edge_shipment("SH-4004", "NLF", route, evs3, hist(-3), None, zt(-3), order(4, promise_h=-1), status="DELIVERED", location="Seattle"),
+        "delivered_without_event", "delivery claimed by tracking only: unable_to_verify", must_include=["does not claim a late delivery"])
+    # 5. No promise at all.
+    o5 = order(5)
+    del o5["promise_datetime_utc"]
+    add(_edge_shipment("SH-4005", "NLF", route, evs3, hist(30), zt(30), None, o5), "missing_promise", "no promise date: unable_to_verify", must_include=["asks a person to find the promise"])
+    # 6-8. Bad money fields.
+    add(_edge_shipment("SH-4006", "NLF", route, evs3, hist(30), zt(30), None, order(6, value=-500)), "negative_order_value", "order value below zero: unable_to_verify")
+    add(_edge_shipment("SH-4007", "NLF", route, evs3, hist(30), zt(30), None, order(7, value=0)), "zero_order_value", "order value of zero: unable_to_verify")
+    add(_edge_shipment("SH-4008", "NLF", route, evs3, hist(30), zt(30), None, order(8, rate=-50)), "negative_penalty_rate", "negative penalty rate: unable_to_verify")
+    # 9. A clean control.
+    evs9 = [bd.ev(-30, wh, "PICKED_UP", "Picked up"), bd.ev(-3, hub, "DEPARTED", "Departed Atlanta Hub")]
+    add(_edge_shipment("SH-4009", "NLF", route, evs9, hist(20), zt(20), None, order(9, promise_h=70)), "control_on_track", "clean control", state="on_track")
+    return scen
+
+
+def main_edge(root):
+    scen = build_edge()
+    shipments = [s for s, _ in scen]
+    labels, queue = bd.make_labels(scen, {}, "edge")
+    for lab, (_, decl) in zip(labels, scen):
+        lab["design_note"] = decl["design_note"]
+    meta = {"dataset_version": "1.1.0-edge", "simulated_now_utc": bd.z(bd.NOW), "dispatcher_timezone": bd.DISPATCHER_TZ,
+            "disclaimer": "All carriers, customers, people, addresses and contact details are fictional.", "split": "edge"}
+    ds = {"meta": meta, "carriers": bd.CARRIERS, "facilities": bd.FACILITIES, "shipments": shipments}
+    errs = bd.validate(shipments, labels, {}, json.dumps(ds), conflicts_ok={s["shipment_id"] for s in shipments})
+    if errs:
+        print("VALIDATION FAILED:", *errs, sep="\n  - ")
+        sys.exit(1)
+    bd.dump(os.path.join(root, "data", "shipments_edge.json"), ds)
+    bd.dump(os.path.join(root, "data", "fault_schedule_edge.json"), {"_comment": "No faults in the edge set."})
+    bd.dump(os.path.join(root, "data", "ground_truth_labels_edge.json"),
+            {"_comment": "HIDDEN LABELS. Never expose to the agent, mock service or any prompt.", "simulated_now_utc": bd.z(bd.NOW),
+             "expected_queue_order": queue, "labels": labels})
+    print(f"OK {len(shipments)} edge shipments; states:", {l['shipment_id']: l['expected_state'] for l in labels})
+
+
 def main():
+    if "--edge" in sys.argv:
+        sys.argv.remove("--edge")
+        return main_edge(sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     root = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     scen, faults = build()
     shipments = [s for s, _ in scen]

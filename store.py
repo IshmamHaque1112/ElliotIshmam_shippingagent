@@ -30,6 +30,20 @@ CREATE TABLE IF NOT EXISTS dispositions(
   created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS feedback(
   id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL, verdict TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS traces(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, case_id INTEGER, shipment_id TEXT NOT NULL, trace_json TEXT NOT NULL,
+  created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS traces_case ON traces(case_id);
+CREATE TABLE IF NOT EXISTS playbook_ticks(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL, step_id TEXT NOT NULL, done INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ticks_case ON playbook_ticks(case_id, step_id, id);
+CREATE TABLE IF NOT EXISTS approval_events(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, case_id INTEGER NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL, draft TEXT,
+  actor TEXT, note TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS approvals_case ON approval_events(case_id, id);
+CREATE TABLE IF NOT EXISTS asks(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, question TEXT NOT NULL, answer TEXT, shipment_ids TEXT, status TEXT NOT NULL,
+  created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS cases_shipment ON cases(shipment_id, id);
 CREATE INDEX IF NOT EXISTS disp_case ON dispositions(case_id, id);
@@ -46,6 +60,8 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     if path not in _initialized:
         conn.executescript(SCHEMA)
+        if "kind" not in {r["name"] for r in conn.execute("PRAGMA table_info(claude_runs)")}:  # databases made before E3
+            conn.execute("ALTER TABLE claude_runs ADD COLUMN kind TEXT NOT NULL DEFAULT 'case'")
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()
         _initialized.add(path)
@@ -116,7 +132,8 @@ def list_cases(dataset: str, *, shipment_id: str | None = None, status: str | No
 # ---- runs
 def add_run(**fields: Any) -> int:
     cols = ("case_id", "shipment_id", "model", "status", "tool_calls", "input_tokens", "output_tokens", "est_cost_usd",
-            "duration_ms", "retries", "rejection_reason")
+            "duration_ms", "retries", "rejection_reason", "kind")
+    fields.setdefault("kind", "case")  # 'case' = a case-file analysis, 'ask' = a question to the queue
     values = tuple(fields.get(c) for c in cols)
     return _insert(f"INSERT INTO claude_runs({','.join(cols)},created_at) VALUES({','.join('?' * len(cols))},?)", values + (_now(),))
 
@@ -139,6 +156,74 @@ def runs_by_model() -> list[dict[str, Any]]:
                  "SUM(est_cost_usd) est_cost_usd, AVG(duration_ms) avg_ms FROM claude_runs GROUP BY model ORDER BY runs DESC")
 
 
+# ---- ask the queue
+def save_ask(question: str, answer: str | None, shipment_ids: list[str], status: str, run_id: int | None) -> int:
+    return _insert("INSERT INTO asks(run_id,question,answer,shipment_ids,status,created_at) VALUES(?,?,?,?,?,?)",
+                   (run_id, question, answer, json.dumps(shipment_ids), status, _now()))
+
+
+def list_asks(limit: int = 20) -> list[dict[str, Any]]:
+    rows = _rows("SELECT * FROM asks ORDER BY id DESC LIMIT ?", (limit,))
+    for r in rows:
+        r["shipment_ids"] = json.loads(r["shipment_ids"] or "[]")
+    return rows
+
+
+# ---- agent traces (one row per analysis; error runs have no case)
+def save_trace(trace: dict[str, Any], *, shipment_id: str, run_id: int | None = None, case_id: int | None = None) -> int:
+    return _insert("INSERT INTO traces(run_id,case_id,shipment_id,trace_json,created_at) VALUES(?,?,?,?,?)",
+                   (run_id, case_id, shipment_id, json.dumps(trace), _now()))
+
+
+def trace_for_case(case_id: int) -> dict[str, Any] | None:
+    rows = _rows("SELECT * FROM traces WHERE case_id=? ORDER BY id DESC LIMIT 1", (case_id,))
+    if not rows:
+        return None
+    return {**json.loads(rows[0]["trace_json"]), "run_id": rows[0]["run_id"], "recorded_at": rows[0]["created_at"]}
+
+
+def trace_for_run(run_id: int) -> dict[str, Any] | None:
+    rows = _rows("SELECT * FROM traces WHERE run_id=? ORDER BY id DESC LIMIT 1", (run_id,))
+    return json.loads(rows[0]["trace_json"]) if rows else None
+
+
+# ---- playbook ticks (append-only; the latest row per step is the current state)
+def playbook_state(case_id: int) -> dict[str, bool]:
+    rows = _rows("SELECT step_id, done FROM playbook_ticks WHERE id IN (SELECT MAX(id) FROM playbook_ticks WHERE case_id=? GROUP BY step_id)", (case_id,))
+    return {r["step_id"]: bool(r["done"]) for r in rows}
+
+
+def set_playbook(case_id: int, done_steps: set[str], all_steps: list[str]) -> int:
+    """Append a row for each step whose state changed. Returns how many rows were added."""
+    current, added = playbook_state(case_id), 0
+    for step in all_steps:
+        want = step in done_steps
+        if current.get(step, False) != want:
+            _insert("INSERT INTO playbook_ticks(case_id,step_id,done,created_at) VALUES(?,?,?,?)", (case_id, step, int(want), _now()))
+            added += 1
+    return added
+
+
+# ---- approval requests (text for a human plus a status a human sets; append-only history, nothing is ever sent)
+def approval_history(case_id: int) -> list[dict[str, Any]]:
+    return _rows("SELECT * FROM approval_events WHERE case_id=? ORDER BY id DESC", (case_id,))
+
+
+def approval_current(case_id: int) -> dict[str, Any] | None:
+    """Latest status, with the draft text carried forward from the 'drafted' row."""
+    rows = _rows("SELECT * FROM approval_events WHERE case_id=? ORDER BY id", (case_id,))
+    if not rows:
+        return None
+    current = dict(rows[-1])
+    current["draft"] = next((r["draft"] for r in reversed(rows) if r["draft"]), None)
+    return current
+
+
+def add_approval_event(case_id: int, role: str, status: str, draft: str | None = None, actor: str | None = None, note: str | None = None) -> int:
+    return _insert("INSERT INTO approval_events(case_id,role,status,draft,actor,note,created_at) VALUES(?,?,?,?,?,?,?)",
+                   (case_id, role, status, draft, (actor or "")[:80] or None, (note or "")[:1000] or None, _now()))
+
+
 # ---- dispositions and feedback
 def add_disposition(case_id: int, status: str, owner: str | None = None, note: str | None = None) -> int:
     if status not in DISPOSITIONS:
@@ -154,6 +239,15 @@ def latest_dispositions(case_ids: list[int]) -> dict[int, dict[str, Any]]:
     rows = _rows(f"SELECT * FROM dispositions WHERE id IN (SELECT MAX(id) FROM dispositions WHERE case_id IN ({marks}) GROUP BY case_id)",
                  tuple(case_ids))
     return {r["case_id"]: r for r in rows}
+
+
+def dispositions_for_dataset(dataset: str) -> list[dict[str, Any]]:
+    return _rows("SELECT d.* FROM dispositions d JOIN cases c ON c.id=d.case_id WHERE c.dataset=? ORDER BY d.id", (dataset,))
+
+
+def max_ids() -> dict[str, int]:
+    row = _rows("SELECT (SELECT COALESCE(MAX(id),0) FROM cases) c, (SELECT COALESCE(MAX(id),0) FROM dispositions) d")[0]
+    return {"case_id": row["c"], "disposition_id": row["d"]}
 
 
 def disposition_history(case_id: int) -> list[dict[str, Any]]:

@@ -14,6 +14,7 @@
     <div class="tag">Read-only demo · {{ dataset_name }} data</div>
   </div></header>
   <main id="main">
+    {% if replay_on %}<div class="banner warn" role="status">Replay is on: showing the data as of {{ replay_on }} UTC. <a href="/simulate#replay">Replay controls</a></div>{% endif %}
     {% if sim_offset %}<div class="banner warn" role="status">Simulated clock is +{{ "%g"|format(sim_offset) }} h. Saved Claude cases from earlier may be stale. <a href="/simulate">Simulation controls</a></div>{% endif %}
     {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
     {% block body %}{% endblock %}

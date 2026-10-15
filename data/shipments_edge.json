@@ -1,0 +1,774 @@
+{
+  "meta": {
+    "dataset_version": "1.1.0-edge",
+    "simulated_now_utc": "2026-10-08T14:00:00Z",
+    "dispatcher_timezone": "America/New_York",
+    "disclaimer": "All carriers, customers, people, addresses and contact details are fictional.",
+    "split": "edge"
+  },
+  "carriers": {
+    "NLF": {
+      "name": "Northline Freight",
+      "support_phone": "555-0142",
+      "support_email": "priority-desk@northline-freight.example",
+      "claim_url": "https://claims.northline-freight.example/file?ref="
+    },
+    "MRX": {
+      "name": "Meridian Express",
+      "support_phone": "555-0177",
+      "support_email": "escalations@meridian-express.example",
+      "claim_url": "https://claims.meridian-express.example/file?ref="
+    },
+    "BWP": {
+      "name": "Bluewave Parcel",
+      "support_phone": "555-0163",
+      "support_email": "tracing@bluewave-parcel.example",
+      "claim_url": "https://claims.bluewave-parcel.example/file?ref="
+    },
+    "ATG": {
+      "name": "Atlas Ground",
+      "support_phone": "555-0119",
+      "support_email": "tracing@atlas-ground.example",
+      "claim_url": "https://claims.atlas-ground.example/file?ref="
+    }
+  },
+  "facilities": {
+    "WH-ATL": {
+      "name": "Atlanta Warehouse",
+      "tz": "America/New_York",
+      "dwell_baseline_hours": 8
+    },
+    "WH-DAL": {
+      "name": "Dallas Warehouse",
+      "tz": "America/Chicago",
+      "dwell_baseline_hours": 8
+    },
+    "WH-DET": {
+      "name": "Detroit Warehouse",
+      "tz": "America/Detroit",
+      "dwell_baseline_hours": 8
+    },
+    "ATL-HUB": {
+      "name": "Atlanta Hub",
+      "tz": "America/New_York",
+      "dwell_baseline_hours": 12
+    },
+    "MEM-HUB": {
+      "name": "Memphis Hub",
+      "tz": "America/Chicago",
+      "dwell_baseline_hours": 12
+    },
+    "DAL-HUB": {
+      "name": "Dallas Hub",
+      "tz": "America/Chicago",
+      "dwell_baseline_hours": 12
+    },
+    "CHI-HUB": {
+      "name": "Chicago Hub",
+      "tz": "America/Chicago",
+      "dwell_baseline_hours": 12
+    },
+    "DEN-HUB": {
+      "name": "Denver Hub",
+      "tz": "America/Denver",
+      "dwell_baseline_hours": 12
+    },
+    "NWK-HUB": {
+      "name": "Newark Hub",
+      "tz": "America/New_York",
+      "dwell_baseline_hours": 12
+    },
+    "SEA-DC": {
+      "name": "Seattle Delivery Center",
+      "tz": "America/Los_Angeles",
+      "dwell_baseline_hours": 12
+    },
+    "BOS-DC": {
+      "name": "Boston Delivery Center",
+      "tz": "America/New_York",
+      "dwell_baseline_hours": 12
+    },
+    "PHX-DC": {
+      "name": "Phoenix Delivery Center",
+      "tz": "America/Phoenix",
+      "dwell_baseline_hours": 12
+    },
+    "DET-BORDER": {
+      "name": "Detroit Border Crossing",
+      "tz": "America/Detroit",
+      "dwell_baseline_hours": 24
+    },
+    "TOR-DC": {
+      "name": "Toronto Delivery Center",
+      "tz": "America/Toronto",
+      "dwell_baseline_hours": 12
+    }
+  },
+  "shipments": [
+    {
+      "shipment_id": "SH-4001",
+      "tracking": {
+        "shipment_id": "SH-4001",
+        "carrier_id": "ATG",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "Chicago Hub",
+        "eta_utc": "2026-10-10T14:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T08:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "ARRIVED",
+          "description": "Arrived at Chicago Hub (handoff to second carrier)"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up",
+            "carrier_id": "NLF"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub",
+            "carrier_id": "NLF"
+          },
+          {
+            "timestamp": "2026-10-07T08:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "ARRIVED",
+            "description": "Arrived at Chicago Hub (handoff to second carrier)",
+            "carrier_id": "ATG"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-10T08:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-10T14:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7001",
+        "customer_name": "Edge Case 1 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-09T00:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4002",
+      "tracking": {
+        "shipment_id": "SH-4002",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "Chicago Hub",
+        "eta_utc": "2026-10-10T14:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T08:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "ARRIVED",
+          "description": "Arrived at Chicago Hub (handoff to second carrier)"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up",
+            "carrier_id": "NLF"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub",
+            "carrier_id": "NLF"
+          },
+          {
+            "timestamp": "2026-10-07T08:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "ARRIVED",
+            "description": "Arrived at Chicago Hub (handoff to second carrier)",
+            "carrier_id": "ATG"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-10T08:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-10T14:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7002",
+        "customer_name": "Edge Case 2 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-09T00:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4003",
+      "tracking": {
+        "shipment_id": "SH-4003",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "Denver Hub",
+        "eta_utc": "2026-10-10T06:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-08T08:00:00Z",
+          "facility_id": "DEN-HUB",
+          "code": "ARRIVED",
+          "description": "Arrived at Denver Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          },
+          {
+            "timestamp": "2026-10-07T14:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Chicago Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-10T00:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-10T06:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7003",
+        "customer_name": "Edge Case 3 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-11T02:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4004",
+      "tracking": {
+        "shipment_id": "SH-4004",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "DELIVERED",
+        "current_location": "Seattle",
+        "eta_utc": null,
+        "delivered_at_utc": "2026-10-08T11:00:00Z",
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T14:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "DEPARTED",
+          "description": "Departed Chicago Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          },
+          {
+            "timestamp": "2026-10-07T14:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Chicago Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-08T05:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-08T11:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7004",
+        "customer_name": "Edge Case 4 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-08T13:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4005",
+      "tracking": {
+        "shipment_id": "SH-4005",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "",
+        "eta_utc": "2026-10-09T20:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T14:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "DEPARTED",
+          "description": "Departed Chicago Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          },
+          {
+            "timestamp": "2026-10-07T14:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Chicago Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-09T14:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-09T20:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7005",
+        "customer_name": "Edge Case 5 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ]
+      }
+    },
+    {
+      "shipment_id": "SH-4006",
+      "tracking": {
+        "shipment_id": "SH-4006",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "",
+        "eta_utc": "2026-10-09T20:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T14:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "DEPARTED",
+          "description": "Departed Chicago Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          },
+          {
+            "timestamp": "2026-10-07T14:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Chicago Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-09T14:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-09T20:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7006",
+        "customer_name": "Edge Case 6 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": -500,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-09T00:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4007",
+      "tracking": {
+        "shipment_id": "SH-4007",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "",
+        "eta_utc": "2026-10-09T20:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T14:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "DEPARTED",
+          "description": "Departed Chicago Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          },
+          {
+            "timestamp": "2026-10-07T14:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Chicago Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-09T14:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-09T20:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7007",
+        "customer_name": "Edge Case 7 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 0,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-09T00:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4008",
+      "tracking": {
+        "shipment_id": "SH-4008",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "",
+        "eta_utc": "2026-10-09T20:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-07T14:00:00Z",
+          "facility_id": "CHI-HUB",
+          "code": "DEPARTED",
+          "description": "Departed Chicago Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-06T02:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-06T14:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          },
+          {
+            "timestamp": "2026-10-07T14:00:00Z",
+            "facility_id": "CHI-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Chicago Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-09T14:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-09T20:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7008",
+        "customer_name": "Edge Case 8 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": -50,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-09T00:00:00Z"
+      }
+    },
+    {
+      "shipment_id": "SH-4009",
+      "tracking": {
+        "shipment_id": "SH-4009",
+        "carrier_id": "NLF",
+        "service_level": "Freight",
+        "origin_facility_id": "WH-ATL",
+        "destination_facility_id": "SEA-DC",
+        "status_raw": "IN_TRANSIT",
+        "current_location": "",
+        "eta_utc": "2026-10-09T10:00:00Z",
+        "delivered_at_utc": null,
+        "latest_checkpoint": {
+          "timestamp": "2026-10-08T11:00:00Z",
+          "facility_id": "ATL-HUB",
+          "code": "DEPARTED",
+          "description": "Departed Atlanta Hub"
+        },
+        "last_updated_utc": "2026-10-08T13:30:00Z"
+      },
+      "timeline": {
+        "events": [
+          {
+            "timestamp": "2026-10-07T08:00:00Z",
+            "facility_id": "WH-ATL",
+            "code": "PICKED_UP",
+            "description": "Picked up"
+          },
+          {
+            "timestamp": "2026-10-08T11:00:00Z",
+            "facility_id": "ATL-HUB",
+            "code": "DEPARTED",
+            "description": "Departed Atlanta Hub"
+          }
+        ],
+        "eta_history": [
+          {
+            "observed_at": "2026-10-06T12:00:00Z",
+            "eta": "2026-10-09T04:00:00Z"
+          },
+          {
+            "observed_at": "2026-10-07T18:00:00Z",
+            "eta": "2026-10-09T10:00:00Z"
+          }
+        ]
+      },
+      "order": {
+        "order_id": "ORD-7009",
+        "customer_name": "Edge Case 9 Supply",
+        "customer_tier": "STANDARD",
+        "order_value_usd": 9000,
+        "sla_penalty_per_hour_usd": 100,
+        "penalty_cap_usd": 2000,
+        "penalty_grace_hours": 0,
+        "ship_to_address": "100 Depot St, Seattle, WA",
+        "mitigation_options": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "label": "Escalate to carrier priority desk",
+            "cost_usd": 0,
+            "hours_saved": 0,
+            "eligible": true,
+            "requires_approval": "dispatcher"
+          }
+        ],
+        "promise_datetime_utc": "2026-10-11T12:00:00Z"
+      }
+    }
+  ]
+}

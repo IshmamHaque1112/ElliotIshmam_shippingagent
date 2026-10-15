@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% from "_macros.html" import chip %}
+{% macro group(title, rows, empty) %}
+<section class="panel"><h2>{{ title }} ({{ rows|length }})</h2>
+  {% if rows %}<div class="scroll"><table><thead><tr><th>Shipment</th><th>State</th><th>Severity</th><th class="num">Exposure</th><th>Disposition</th><th></th></tr></thead><tbody>
+  {% for c in rows %}<tr><td><a href="/shipments/{{ c.shipment_id }}">{{ c.shipment_id }}</a></td><td>{{ chip(c.state) }}</td><td>{{ chip(c.severity) if c.severity else '-' }}</td>
+    <td class="num">{{ c.exposure_usd|usd }}</td><td>{{ chip(c.disposition.status) }}{% if c.disposition.owner %} <span class="muted">{{ c.disposition.owner }}</span>{% endif %}</td>
+    <td><a class="btn" href="/cases/{{ c.id }}">Case #{{ c.id }}</a></td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<p class="muted">{{ empty }}</p>{% endif %}</section>
+{% endmacro %}
+{% block body %}
+<h1>Shift handoff</h1>
+<p class="sub">{% if report.since %}Changes since {{ report.since }} UTC{% elif report.marker %}Changes since the handoff was last reviewed ({{ report.marker.at }}{% if report.marker.by %} by {{ report.marker.by }}{% endif %}){% else %}No review recorded yet: showing everything saved{% endif %}</p>
+{% if report.bad_since %}<div class="banner warn" role="status">That time was not understood; use the form YYYY-MM-DDTHH:MM:SSZ. Showing changes since the last review instead.</div>{% endif %}
+<section class="panel"><form class="filters" method="get" action="/handoff">
+  <div><label for="since">Since (UTC)</label><input id="since" name="since" placeholder="2026-10-08T14:00:00Z" value="{{ report.since or '' }}"></div><button type="submit">Show</button>
+  <a class="btn" href="/handoff">Since last review</a></form>
+  <form class="filters" method="post" action="/handoff/review"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div><label for="by">Reviewed by</label><input id="by" name="by" maxlength="80"></div><button class="primary" type="submit">Mark handoff reviewed</button></form>
+  <p class="muted">Built only from saved cases and dispositions. Marking it reviewed stores a marker so the next view starts from here. Nothing is sent.</p></section>
+{% if report.empty %}<section class="panel"><p class="empty">Nothing to hand off yet. Save or analyze a case and it will appear here.</p></section>{% endif %}
+{{ group("New exceptions", report.new, "No new exceptions in this window.") }}
+{{ group("Worsened", report.worsened, "Nothing got worse in this window.") }}
+{{ group("Newly resolved", report.resolved, "Nothing was resolved in this window.") }}
+<section class="panel"><h2>Still open, by owner</h2>
+  {% for g in report.open_by_owner %}<h3>{{ g.owner }} · {{ g.cases|length }} case{{ '' if g.cases|length == 1 else 's' }} · {{ g.exposure_usd|usd }}</h3>
+    <ul>{% for c in g.cases %}<li><a href="/cases/{{ c.id }}">{{ c.shipment_id }}</a> · {{ chip(c.state) }} · {{ c.exposure_usd|usd }} · {{ chip(c.disposition.status) }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted">No open cases.</p>{% endfor %}</section>
+{% endblock %}

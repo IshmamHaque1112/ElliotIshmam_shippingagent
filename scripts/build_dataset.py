@@ -418,25 +418,51 @@ def dual_time(ts):
     return None  # filled per-facility below
 
 
+def data_problems(sh):
+    """Reference version of the data-quality gate for conflicting or bad data (written independently of tools.py)."""
+    tr, tl, od = sh["tracking"], sh["timeline"], sh["order"]
+    bad = []
+    if not (od.get("promise_datetime_utc") or od.get("promise_date")):
+        bad.append("no promise")
+    if od["order_value_usd"] <= 0:
+        bad.append("non-positive order value")
+    if min(od["sla_penalty_per_hour_usd"], od["penalty_cap_usd"], od["penalty_grace_hours"]) < 0:
+        bad.append("negative penalty term")
+    stamped = sorted(((parse_ts(e["timestamp"], FACILITIES[e["facility_id"]]["tz"]), e) for e in tl["events"]), key=lambda x: x[0])
+    last_ts, last = stamped[-1]
+    if last.get("carrier_id") and last["carrier_id"] != tr["carrier_id"]:
+        bad.append("carrier conflict")
+    cp = tr.get("latest_checkpoint")
+    if cp and parse_ts(cp["timestamp"], FACILITIES[cp["facility_id"]]["tz"]) - last_ts > timedelta(minutes=60):
+        bad.append("tracking newer than timeline")
+    if tr.get("delivered_at_utc") and all(e["code"] != "DELIVERED" for _, e in stamped):
+        bad.append("delivered without event")
+    return bad
+
+
 def reference(sh, faults):
     sid, tr, tl, od = sh["shipment_id"], sh["tracking"], sh["timeline"], sh["order"]
     f = faults.get(sid, {})
     down = lambda tool: f.get(tool, {}).get("times") == "always"
     mult = VIP_MULTIPLIER if od["customer_tier"] == "VIP_ENTERPRISE" else 1.0
-    promise = promise_dt(od, tr["destination_facility_id"])
+    try:
+        promise = promise_dt(od, tr["destination_facility_id"])
+    except (KeyError, ValueError):
+        promise = None
     m = {k: None for k in ["eta_forward_revisions", "eta_drift_hours", "dwell_hours", "dwell_baseline_hours",
                            "hours_late_now", "projected_hours_late", "accrued_penalty_usd",
                            "projected_penalty_usd", "total_exposure_usd", "priority_score", "severity",
                            "urgency_badge", "next_milestone", "recommended_action_id"]}
-    m["promise_utc"] = z(promise)
+    m["promise_utc"] = z(promise) if promise else None
 
-    if down("get_tracking_status") or down("event_timeline"):
+    if down("get_tracking_status") or down("event_timeline") or data_problems(sh):
         state = "unable_to_verify"
         exp = float(od["order_value_usd"])
-        m.update(total_exposure_usd=exp, priority_score=exp * mult,
-                 severity="HIGH" if exp >= SEVERITY_HIGH_USD else "MEDIUM" if exp >= SEVERITY_MEDIUM_USD else "LOW",
-                 urgency_badge="IMMEDIATE_SLACK_OR_CALL" if exp >= IMMEDIATE_EXPOSURE_USD else "DAILY_ROLLUP",
-                 recommended_action_id="MANUAL_VERIFY")
+        m.update(recommended_action_id="MANUAL_VERIFY")
+        if exp > 0:
+            m.update(total_exposure_usd=exp, priority_score=exp * mult,
+                     severity="HIGH" if exp >= SEVERITY_HIGH_USD else "MEDIUM" if exp >= SEVERITY_MEDIUM_USD else "LOW",
+                     urgency_badge="IMMEDIATE_SLACK_OR_CALL" if exp >= IMMEDIATE_EXPOSURE_USD else "DAILY_ROLLUP")
         m["state"] = state
         return rnd(m)
 
@@ -549,11 +575,12 @@ def make_labels(scen, faults, split):
             lab["fault_note"] = decl["fault_note"]
         labels.append(lab)
     queue = sorted((l for l in labels if l["expected_state"] in EXCEPTION_STATES | {"delivered_late"}),
-                   key=lambda l: (-l["expected_metrics"]["priority_score"], l["shipment_id"]))
+                   key=lambda l: (-(l["expected_metrics"]["priority_score"] or 0), l["shipment_id"]))
     return labels, [l["shipment_id"] for l in queue]
 
 
-def validate(shipments, labels, faults, raw_text):
+def validate(shipments, labels, faults, raw_text, conflicts_ok=()):
+    """`conflicts_ok`: ids of deliberately inconsistent shipments (the edge set) that skip the consistency checks."""
     errs = []
     ids = [s["shipment_id"] for s in shipments]
     if len(ids) != len(set(ids)):
@@ -575,6 +602,8 @@ def validate(shipments, labels, faults, raw_text):
         for h in tl["eta_history"]:
             if parse_ts(h["observed_at"]) > NOW:
                 errs.append(f"{sid}: eta observation in the future")
+        if sid in conflicts_ok:
+            continue
         if tr.get("delivered_at_utc"):
             if parse_ts(tr["delivered_at_utc"]) > NOW:
                 errs.append(f"{sid}: delivered in the future")

@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% from "_macros.html" import chip %}
+{% block title %}{{ a.shipment_id }} · Claim packet{% endblock %}
+{% block body %}
+<p><a href="/shipments/{{ a.shipment_id }}">&larr; Shipment detail</a></p>
+<h1>Claim packet · {{ a.shipment_id }}</h1>
+<p class="sub">{{ chip(a.state) }} Order {{ order.order_id }} · {{ order.customer_name }} · prepared for a person to file; nothing is filed here.</p>
+<section class="panel"><h2>Late delivery</h2><dl class="facts">
+  <div><dt>Promise</dt><dd>{{ a.promise_dispatcher }}<br><span class="muted">{{ a.promise_utc }} UTC</span></dd></div>
+  <div><dt>Hours late</dt><dd>{{ a.hours_late_now|num(2) }} h</dd></div>
+  <div><dt>Penalty owed</dt><dd>{{ steps.total_usd|usd }}</dd></div></dl></section>
+<section class="panel"><h2>Penalty calculation (computed by code)</h2>
+  <ol>{% for st in steps.steps %}<li><b>{{ st.label }}:</b> {{ st.detail }}{% if st.amount_usd is not none %} = {{ st.amount_usd|usd }}{% endif %}</li>{% endfor %}</ol>
+  <p><b>Penalty owed: {{ steps.total_usd|usd }}</b>{% if steps.cap_applied %} <span class="muted">(uncapped amount {{ steps.uncapped_usd|usd }})</span>{% endif %}</p></section>
+<section class="panel"><h2>Timeline (UTC)</h2>
+  <p class="muted">Untrusted carrier text is shown escaped.{% if duplicates %} {{ duplicates }} duplicate scan(s) collapsed.{% endif %}</p>
+  <div class="scroll"><table><thead><tr><th>UTC</th><th>Facility</th><th>Code</th><th>Description</th></tr></thead><tbody>
+  {% for e in events %}<tr><td>{{ e.utc }}</td><td>{{ e.facility }}</td><td>{{ e.code }}</td><td>{{ e.description }}{% if e.note %}<br><span class="muted">{{ e.note }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div></section>
+{% if carrier %}<section class="panel"><h2>Carrier contact</h2><p>{{ carrier.name }} · {{ carrier.support_phone }} · {{ carrier.support_email }}
+  {% if claim_link %}<br><span class="muted">Claim link: {{ claim_link }}</span>{% endif %}</p></section>{% endif %}
+<section class="panel"><h2>Copy-ready text</h2><label for="claimtext">Claim summary</label><textarea id="claimtext" readonly rows="16">{{ text }}</textarea>
+  <p><button type="button" data-copy="claimtext">Copy</button> <button type="button" data-print>Print</button></p></section>
+{% endblock %}

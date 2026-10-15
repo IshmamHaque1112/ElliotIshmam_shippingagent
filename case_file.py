@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, ValidationError
 import config
 import prompt
 import tools
+import agent_trace as trace_module
 from agent import AgentError
 
 FALLBACK_NARRATIVE = "none (fallback)"
@@ -166,6 +167,7 @@ def fallback_case_file(assessment: dict[str, Any], status: str) -> CaseFile:
 def _note(trace: dict[str, Any] | None, hint: str) -> None:
     if trace is not None:
         trace["rejections"].append(hint)
+        trace["attempt_results"].append({"outcome": "rejected", "kind": trace_module.classify_rejection(hint), "reason": hint})
 
 
 def build_case_file(
@@ -182,7 +184,7 @@ def build_case_file(
 
     hint = None
     if trace is not None:
-        trace.update(attempts=0, rejections=[])
+        trace.update(attempts=0, rejections=[], attempt_results=[])
     for _attempt in range(2):
         if trace is not None:
             trace["attempts"] += 1
@@ -202,6 +204,8 @@ def build_case_file(
             _note(trace, hint)
             continue
 
+        if trace is not None:
+            trace["attempt_results"].append({"outcome": "accepted", "kind": None, "reason": ""})
         sections = _code_sections(assessment, status)
         sections["recommendation"]["rationale"] = analysis.recommendation_rationale
         return CaseFile(

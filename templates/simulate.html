@@ -6,6 +6,20 @@
   {% if saved_cases %}<p class="muted">{{ saved_cases }} saved case(s) will show as stale after you move the clock.</p>{% endif %}
   <div class="row">{% for h in (6, 24, 72) %}<form class="inline" method="post" action="/simulate/advance"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="hours" value="{{ h }}"><button type="submit">+{{ h }} h</button></form>{% endfor %}
     <form class="inline" method="post" action="/simulate/reset"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Reset clock and faults</button></form></div></section>
+<section class="panel" id="replay" data-csrf="{{ csrf }}"><h2>Event replay</h2>
+  <p class="muted">Watch the queue build as events arrive. Replay hides events that had not happened yet and reveals them as the replay clock moves; the rules are unchanged. At the end it matches the normal view. While a replay is active the clock offset above is ignored.</p>
+  <p>Replay: <b id="replay-mode">{{ 'active' if replay.active else 'off' }}</b> · replay time <b id="replay-now">{{ replay.now_utc }}</b> (from {{ replay.start_utc }} to {{ replay.end_utc }})</p>
+  <p>Shipments visible <b id="replay-visible">{{ replay.shipments_visible }}</b> of {{ replay.shipments_total }} · active exceptions <b id="replay-exceptions">{{ replay.active_exceptions }}</b> · revenue exposed <b id="replay-exposed">{{ replay.revenue_exposed_usd|usd }}</b></p>
+  <div class="row">
+    <form class="inline" method="post" action="/simulate/replay/start"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Start at the beginning</button></form>
+    <form class="inline" method="post" action="/simulate/replay/step"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="hours" value="6"><button type="submit"{% if not replay.active %} disabled{% endif %}>Step +6 h</button></form>
+    <form class="inline" method="post" action="/simulate/replay/end"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Jump to the end</button></form>
+    <form class="inline" method="post" action="/simulate/replay/stop"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Stop replay</button></form></div>
+  <div class="row"><button type="button" id="replay-play"{% if not replay.active %} disabled{% endif %}>Play</button><button type="button" id="replay-pause" disabled>Pause</button>
+    <label for="replay-speed">Speed</label><select id="replay-speed"><option value="1">1 h per second</option><option value="6" selected>6 h per second</option><option value="24">24 h per second</option></select>
+    <span id="replay-status" class="muted" role="status"></span></div>
+  <h3>Top of the queue</h3><ol id="replay-top">{% for r in replay.top %}<li>{{ r.shipment_id }} · {{ r.state|words }} · {{ r.exposure_usd|usd }}</li>{% else %}<li class="muted">Nothing in the queue yet.</li>{% endfor %}</ol>
+</section>
 <section class="panel"><h2>Faults</h2><p class="muted">A fault makes a tool fail on every call. After three attempts the shipment becomes unable to verify. "off" removes a scheduled fault; "clear" removes your override.</p>
   <form class="filters" method="post" action="/simulate/fault"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div><label for="sid">Shipment</label><select id="sid" name="shipment_id">{% for i in ids %}<option>{{ i }}</option>{% endfor %}</select></div>

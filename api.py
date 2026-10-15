@@ -83,7 +83,88 @@ def case(case_id: int):
     if row is None:
         return fail("not found", 404)
     row["disposition"] = store.latest_dispositions([case_id]).get(case_id, {"status": "new"})
-    return ok(case=case_view(row, pipeline.snapshot()), history=store.disposition_history(case_id), feedback=store.feedback_for(case_id))
+    return ok(case=case_view(row, pipeline.snapshot()), history=store.disposition_history(case_id), feedback=store.feedback_for(case_id),
+              trace=store.trace_for_case(case_id), approval=store.approval_current(case_id), approval_history=store.approval_history(case_id), trace_untrusted=["trace.attempts[].calls[].summary", "trace.attempts[].calls[].arguments"])
+
+
+def incident_view(c: dict[str, Any], detail: bool = False) -> dict[str, Any]:
+    out = {k: c[k] for k in ("id", "kind", "title", "size", "exposure_usd", "carriers", "first_scan_utc", "last_scan_utc", "why", "recommendation")}
+    out["shipment_ids"] = [m["shipment_id"] for m in c["members"]]
+    if detail:
+        out["members"] = c["members"]
+        out["untrusted_fields"] = ["members[].note", "carrier_note"]
+        out["carrier_note"] = c.get("carrier_note")
+    return out
+
+
+@bp.get("/incidents")
+def incidents():
+    import clustering
+    return ok(incidents=[incident_view(c) for c in clustering.for_snapshot(pipeline.snapshot())])
+
+
+@bp.get("/incidents/<incident_id>")
+def incident(incident_id: str):
+    import clustering
+    found = clustering.find(clustering.for_snapshot(pipeline.snapshot()), incident_id)
+    return ok(incident=incident_view(found, True)) if found else fail("not found", 404)
+
+
+@bp.get("/watch")
+def watch():
+    snap = pipeline.snapshot()
+    return ok(watch=[{"shipment_id": sid, "reasons": w["reasons"], "state": snap.by_id[sid]["state"]} for sid, w in sorted(snap.watch.items())])
+
+
+@bp.post("/ask")
+def ask_route():
+    """Ask a question about the queue. Counts against the usage cap exactly like analyze."""
+    import ask as ask_module
+    security.check_csrf()
+    question = " ".join(str(_body().get("question", "")).split())[:ask_module.MAX_QUESTION_CHARS]
+    if not question:
+        return fail("question is required", 400)
+    kind, outcome, message = ask_module.ask_with_cap(question)
+    if kind != "ok":
+        return fail(message, STATUS[kind])
+    return ok(ask_id=outcome.ask_id, status=outcome.status, answer=outcome.answer, shipment_ids=outcome.shipment_ids,
+              message=None if outcome.answer else ask_module.NO_ANSWER, analyses_remaining=limits.remaining())
+
+
+@bp.get("/replay")
+def replay_get():
+    import views
+    return ok(**views.replay_state())
+
+
+@bp.post("/replay/<action>")
+def replay_post(action: str):
+    """Used by the play button. Same actions as the page: start, step (hours), end, stop."""
+    import views
+    security.check_csrf()
+    try:
+        views.replay_apply(action, float(_body()["hours"]) if _body().get("hours") else None)
+    except (ValueError, KeyError):
+        return fail("bad replay request", 400)
+    return ok(**views.replay_state())
+
+
+@bp.get("/forecast")
+def forecast():
+    import forecast as forecast_module
+    return ok(**forecast_module.project(pipeline.snapshot()))
+
+
+@bp.get("/handoff")
+def handoff():
+    import views  # the page and the API share one report builder
+    snap = pipeline.snapshot()
+    report = views.handoff_report(request.args.get("since"), snap.dataset_name)
+    brief = lambda rows: [{"case_id": c["id"], "shipment_id": c["shipment_id"], "state": c["state"], "exposure_usd": c["exposure_usd"],
+                           "disposition": c["disposition"]} for c in rows]
+    return ok(since=report["since"], marker=report["marker"], new=brief(report["new"]), worsened=brief(report["worsened"]),
+              resolved=brief(report["resolved"]),
+              open_by_owner=[{"owner": g["owner"], "exposure_usd": g["exposure_usd"], "cases": brief(g["cases"])} for g in report["open_by_owner"]])
 
 
 @bp.get("/runs")

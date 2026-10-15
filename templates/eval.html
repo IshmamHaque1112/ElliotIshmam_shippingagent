@@ -1,12 +1,16 @@
 {% extends "base.html" %}{% from "_macros.html" import chip %}
 {% block title %}Eval{% endblock %}
 {% block body %}
-<h1>Evaluation</h1><p class="sub">Shows stored results only. Evals run from the command line because live runs spend credits: <code>python eval.py --no-llm</code> or <code>python eval.py --model claude-haiku-5-5</code>.</p>
+<h1>Evaluation</h1><p class="sub">Shows stored results only. Evals run from the command line because live runs spend credits: <code>python eval.py --no-llm</code> or <code>python eval.py --model claude-haiku-5-5</code> (also <code>--judge</code>, <code>--injection</code>, and <code>--labels</code> with <code>--dataset-file</code> for a private hold-out).</p>
 {% if results %}<section class="cards"><div class="card"><span>Passed</span><strong>{{ results.summary.passed }}</strong></div><div class="card"><span>Failed</span><strong>{{ results.summary.failed }}</strong></div><div class="card"><span>Skipped</span><strong>{{ results.summary.skipped }}</strong></div>
   <div class="card"><span>Mode · model</span><strong>{{ results.summary.mode }}{% if results.summary.model %} · {{ results.summary.model }}{% endif %}</strong></div></section>
+<section class="panel"><h2>Scorecard by scenario</h2><p class="muted">Weakest first. Pass rate counts the checks that ran (skipped checks are left out).</p>
+  <div class="scroll"><table><thead><tr><th>Scenario</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Pass rate</th></tr></thead><tbody>
+  {% for c in cards %}<tr><td>{{ c.scenario }}</td><td class="num">{{ c.passed }}</td><td class="num">{{ c.failed }}</td><td class="num">{{ c.skipped }}</td><td class="num">{{ ('%.0f%%' % (c.rate * 100)) if c.rate is not none else '-' }}</td></tr>{% endfor %}</tbody></table></div></section>
 <section class="panel"><h2>Latest results ({{ results.summary.dataset }} dataset)</h2><div class="scroll"><table><thead><tr><th>Shipment</th><th>Check</th><th>Result</th><th>Detail</th></tr></thead><tbody>
 {% for r in results.results if r.result != 'SKIP' %}<tr><td>{{ r.shipment_id }}</td><td>{{ r.check }}</td><td>{{ chip('wrong' if r.result == 'FAIL' else 'ok', r.result) }}</td><td>{{ r.detail }}</td></tr>{% endfor %}</tbody></table></div></section>
 {% else %}<section class="panel empty">No eval results yet. Run <code>python eval.py --no-llm</code> in the project folder.</section>{% endif %}
+<div class="grid g2"><section class="panel"><h2>Pass rate over runs</h2>{{ rate_chart }}</section><section class="panel"><h2>Tokens over runs</h2>{{ token_chart }}</section></div>
 <section class="panel"><h2>History (model comparison)</h2><div class="scroll"><table><thead><tr><th>When</th><th>Dataset</th><th>Mode</th><th>Model</th><th class="num">Passed</th><th class="num">Failed</th><th>Tokens</th></tr></thead><tbody>
 {% for h in history %}<tr><td class="muted">{{ h.at }}</td><td>{{ h.dataset }}</td><td>{{ h.mode }}</td><td>{{ h.model or '-' }}</td><td class="num">{{ h.passed }}</td><td class="num">{{ h.failed }}</td><td>{{ h.token_usage or '-' }}</td></tr>
 {% else %}<tr><td colspan="7" class="empty">No history yet.</td></tr>{% endfor %}</tbody></table></div></section>

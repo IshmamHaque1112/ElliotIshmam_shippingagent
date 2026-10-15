@@ -7,6 +7,7 @@ from typing import Any
 from anthropic import APIConnectionError, APIError
 
 import agent
+import agent_trace
 import limits
 import case_file
 import config
@@ -64,28 +65,38 @@ def analyze(shipment_id: str) -> Outcome:
     client = agent.make_client()
     service = pipeline.load_service()
     model, usage, trace, started = agent.model_name(), {}, {}, time.perf_counter()
+    attempt_calls: list[list[dict[str, Any]]] = []
+
+    def investigate(hint):
+        calls: list[dict[str, Any]] = []
+        attempt_calls.append(calls)
+        return agent.investigate(client, service, a, hint, usage=usage, calls=calls)
+
+    def trace_doc(**extra) -> dict[str, Any]:
+        return agent_trace.build(attempt_calls, trace.get("attempt_results", []), **extra)
 
     def millis() -> int:
         return int((time.perf_counter() - started) * 1000)
 
     try:
-        case = case_file.build_case_file(
-            a, lambda hint: agent.investigate(client, service, a, hint, usage=usage), status=status, trace=trace)
+        case = case_file.build_case_file(a, investigate, status=status, trace=trace)
     except APIError as error:
         if not isinstance(error, APIConnectionError):  # a connection failure never reached Anthropic
-            store.add_run(shipment_id=shipment_id, model=model, status="error", tool_calls=usage.get("tool_calls", 0),
-                          input_tokens=usage.get("input_tokens", 0), output_tokens=usage.get("output_tokens", 0),
-                          duration_ms=millis(), retries=max(0, trace.get("attempts", 1) - 1),
-                          rejection_reason=api_error_message(error)[:300])
+            message = api_error_message(error)[:300]
+            run_id = store.add_run(shipment_id=shipment_id, model=model, status="error", tool_calls=usage.get("tool_calls", 0),
+                                   input_tokens=usage.get("input_tokens", 0), output_tokens=usage.get("output_tokens", 0),
+                                   duration_ms=millis(), retries=max(0, trace.get("attempts", 1) - 1), rejection_reason=message)
+            store.save_trace(trace_doc(error=message, final="error"), shipment_id=shipment_id, run_id=run_id)
         raise
 
     attempts = trace.get("attempts", 1)
     run_state = "fallback" if case.narrative != "claude" else "retried" if attempts > 1 else "ok"
     case_id = _save(snap, a, case, model)
-    store.add_run(case_id=case_id, shipment_id=shipment_id, model=model, status=run_state, tool_calls=usage.get("tool_calls", 0),
+    run_id = store.add_run(case_id=case_id, shipment_id=shipment_id, model=model, status=run_state, tool_calls=usage.get("tool_calls", 0),
                   input_tokens=usage.get("input_tokens", 0), output_tokens=usage.get("output_tokens", 0),
                   est_cost_usd=_estimate_cost(model, usage), duration_ms=millis(), retries=max(0, attempts - 1),
                   rejection_reason="; ".join(trace.get("rejections", []))[:500] or None)
+    store.save_trace(trace_doc(final=run_state), shipment_id=shipment_id, run_id=run_id, case_id=case_id)
     return Outcome(case_id, case)
 
 

@@ -18,3 +18,8 @@ runs.db
 runs.db-journal
 report.html
 eval_history.jsonl
+
+# Private hold-out evals (never commit)
+.private_eval/
+eval_results_*.json
+eval_history_*.jsonl

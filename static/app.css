@@ -58,3 +58,13 @@ footer.foot { margin: 24px 0 0; color: var(--muted); font-size: .84rem; } .empty
 .skip { position: absolute; left: -999px; } .skip:focus { left: 8px; top: 8px; background: var(--panel); padding: 6px 10px; z-index: 5; }
 @media (max-width: 760px) { .g2, .g3 { grid-template-columns: 1fr; } .tag { display: none; } h1 { font-size: 1.35rem; } }
 @media print { header.top, nav, form, .btn, button, footer.foot { display: none !important; } body { background: #fff; color: #000; } .panel { border: 0; padding: 0; } }
+ol.trace { padding-left: 20px; } ol.trace li { margin-bottom: 10px; } ol.trace code { word-break: break-word; white-space: pre-wrap; }
+ul.checks { list-style: none; padding-left: 0; } ul.checks li { margin-bottom: 6px; }
+.chip.watch, .chip.requested, .chip.drafted { background: var(--warn-bg); color: var(--warn); } .chip.approved, .chip.facility, .chip.customs { background: var(--ok-bg); color: var(--ok); }
+.chip.declined { background: var(--bad-bg); color: var(--bad); } .chip.weather { background: var(--unk-bg); color: var(--unk); } .card strong.small { font-size: .9rem; }
+@media print { textarea { border: 0; } }
+svg polyline.tr0 { fill: none; stroke: var(--accent); stroke-width: 2.5; } svg polyline.tr1 { fill: none; stroke: var(--warn); stroke-width: 2.5; }
+svg polyline.tr2 { fill: none; stroke: var(--late); stroke-width: 2.5; } svg polyline.tr3 { fill: none; stroke: var(--unk); stroke-width: 2.5; }
+svg circle.tr0d, i.sw.tr0d { fill: var(--accent); background: var(--accent); } svg circle.tr1d, i.sw.tr1d { fill: var(--warn); background: var(--warn); }
+svg circle.tr2d, i.sw.tr2d { fill: var(--late); background: var(--late); } svg circle.tr3d, i.sw.tr3d { fill: var(--unk); background: var(--unk); }
+.answer { white-space: pre-wrap; }

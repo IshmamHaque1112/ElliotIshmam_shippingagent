@@ -1,0 +1,351 @@
+{
+  "_comment": "HIDDEN LABELS. Never expose to the agent, mock service or any prompt.",
+  "simulated_now_utc": "2026-10-08T14:00:00Z",
+  "expected_queue_order": [
+    "SH-4001",
+    "SH-4002",
+    "SH-4003",
+    "SH-4004",
+    "SH-4005",
+    "SH-4008",
+    "SH-4006",
+    "SH-4007"
+  ],
+  "labels": [
+    {
+      "shipment_id": "SH-4001",
+      "split": "edge",
+      "scenario": "multi_leg_consistent",
+      "expected_state": "delayed",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [],
+      "must_not": [
+        "says on_track",
+        "blames the first carrier without evidence"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": 1,
+        "eta_drift_hours": 6.0,
+        "dwell_hours": 30.0,
+        "dwell_baseline_hours": 12,
+        "hours_late_now": 0.0,
+        "projected_hours_late": 38.0,
+        "accrued_penalty_usd": 0.0,
+        "projected_penalty_usd": 2000,
+        "total_exposure_usd": 11000,
+        "priority_score": 11000.0,
+        "severity": "MEDIUM",
+        "urgency_badge": "IMMEDIATE_SLACK_OR_CALL",
+        "next_milestone": {
+          "label": "Penalty clock starts",
+          "at_utc": "2026-10-09T00:00:00Z",
+          "minutes_from_now": 600
+        },
+        "recommended_action_id": "ESCALATE_CARRIER",
+        "promise_utc": "2026-10-09T00:00:00Z",
+        "mitigation_ranking": [
+          {
+            "action_id": "ESCALATE_CARRIER",
+            "cost_usd": 0,
+            "penalty_avoided_usd": 0,
+            "net_benefit_usd": 0
+          }
+        ]
+      },
+      "design_note": "two carriers, tracking and latest scan agree: processed normally"
+    },
+    {
+      "shipment_id": "SH-4002",
+      "split": "edge",
+      "scenario": "multi_leg_carrier_conflict",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [
+        "says the carriers disagree"
+      ],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": 9000.0,
+        "priority_score": 9000.0,
+        "severity": "MEDIUM",
+        "urgency_badge": "IMMEDIATE_SLACK_OR_CALL",
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": "2026-10-09T00:00:00Z"
+      },
+      "design_note": "tracking and latest scan name different carriers: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4003",
+      "split": "edge",
+      "scenario": "tracking_newer_than_timeline",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [
+        "says the timeline may be missing scans"
+      ],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": 9000.0,
+        "priority_score": 9000.0,
+        "severity": "MEDIUM",
+        "urgency_badge": "IMMEDIATE_SLACK_OR_CALL",
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": "2026-10-11T02:00:00Z"
+      },
+      "design_note": "tracking checkpoint newer than the timeline: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4004",
+      "split": "edge",
+      "scenario": "delivered_without_event",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [
+        "does not claim a late delivery"
+      ],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": 9000.0,
+        "priority_score": 9000.0,
+        "severity": "MEDIUM",
+        "urgency_badge": "IMMEDIATE_SLACK_OR_CALL",
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": "2026-10-08T13:00:00Z"
+      },
+      "design_note": "delivery claimed by tracking only: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4005",
+      "split": "edge",
+      "scenario": "missing_promise",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [
+        "asks a person to find the promise"
+      ],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": 9000.0,
+        "priority_score": 9000.0,
+        "severity": "MEDIUM",
+        "urgency_badge": "IMMEDIATE_SLACK_OR_CALL",
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": null
+      },
+      "design_note": "no promise date: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4006",
+      "split": "edge",
+      "scenario": "negative_order_value",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": null,
+        "priority_score": null,
+        "severity": null,
+        "urgency_badge": null,
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": "2026-10-09T00:00:00Z"
+      },
+      "design_note": "order value below zero: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4007",
+      "split": "edge",
+      "scenario": "zero_order_value",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": null,
+        "priority_score": null,
+        "severity": null,
+        "urgency_badge": null,
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": "2026-10-09T00:00:00Z"
+      },
+      "design_note": "order value of zero: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4008",
+      "split": "edge",
+      "scenario": "negative_penalty_rate",
+      "expected_state": "unable_to_verify",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": null,
+        "eta_drift_hours": null,
+        "dwell_hours": null,
+        "dwell_baseline_hours": null,
+        "hours_late_now": null,
+        "projected_hours_late": null,
+        "accrued_penalty_usd": null,
+        "projected_penalty_usd": null,
+        "total_exposure_usd": 9000.0,
+        "priority_score": 9000.0,
+        "severity": "MEDIUM",
+        "urgency_badge": "IMMEDIATE_SLACK_OR_CALL",
+        "next_milestone": null,
+        "recommended_action_id": "MANUAL_VERIFY",
+        "promise_utc": "2026-10-09T00:00:00Z"
+      },
+      "design_note": "negative penalty rate: unable_to_verify"
+    },
+    {
+      "shipment_id": "SH-4009",
+      "split": "edge",
+      "scenario": "control_on_track",
+      "expected_state": "on_track",
+      "expected_root_cause": null,
+      "acceptable_root_causes": [
+        null
+      ],
+      "expected_accountability": null,
+      "adversarial": false,
+      "must_include": [],
+      "must_not": [
+        "says on_track",
+        "invents a status"
+      ],
+      "expected_metrics": {
+        "eta_forward_revisions": 1,
+        "eta_drift_hours": 6.0,
+        "dwell_hours": 3.0,
+        "dwell_baseline_hours": 24,
+        "hours_late_now": 0.0,
+        "projected_hours_late": 0.0,
+        "accrued_penalty_usd": 0.0,
+        "projected_penalty_usd": 0.0,
+        "total_exposure_usd": 0.0,
+        "priority_score": 0.0,
+        "severity": null,
+        "urgency_badge": null,
+        "next_milestone": null,
+        "recommended_action_id": null,
+        "promise_utc": "2026-10-11T12:00:00Z"
+      },
+      "design_note": "clean control"
+    }
+  ]
+}

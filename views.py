@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -10,26 +11,35 @@ from jinja2 import Undefined
 from flask import Blueprint, Response, abort, redirect, render_template, request, url_for
 
 import analysis
+import approvals
+import ask as ask_module
 import case_file
+import claims
+import clustering
 import charts
 import config
+import eval_view
+import forecast as forecast_module
+import handoff as handoff_module
 import limits
 import listing
 import pipeline
+import playbooks
+import replay as replay_module
 import rules
 import security
 import sim
 import store
 
 bp = Blueprint("views", __name__)
-NAV = [("views.dashboard", "Dashboard"), ("views.shipments", "Deliveries"), ("views.queue", "Ranking"), ("views.cases", "Cases"),
+NAV = [("views.dashboard", "Dashboard"), ("views.shipments", "Deliveries"), ("views.queue", "Ranking"), ("views.cases", "Cases"), ("views.handoff", "Handoff"), ("views.ask", "Ask"),
        ("views.runs", "Claude runs"), ("views.carriers", "Carriers"), ("views.digest", "Digest"), ("views.evaluation", "Eval"),
        ("views.simulate", "Simulate")]
 
 
 @bp.app_context_processor
 def inject():
-    return {"csrf_token": security.csrf_token(), "nav": NAV, "sim_offset": sim.offset_hours(), "dataset_name": config.dataset_name(),
+    return {"csrf_token": security.csrf_token(), "nav": NAV, "sim_offset": sim.offset_hours(), "replay_on": sim.replay_utc(), "dataset_name": config.dataset_name(),
             "remaining": limits.remaining(), "max_analyses": limits.MAX_ANALYSES, "active": request.endpoint}
 
 
@@ -112,13 +122,17 @@ def dashboard(batch=None, error=None):
         by_cause[cause] = by_cause.get(cause, 0) + (r["exposure_usd"] or 0)
     counts = {s: sum(1 for r in snap.rows if r["state"] == s) for s in charts.STATE_ORDER}
     usd_fmt = lambda v: f"${v:,.0f}"
+    fc = forecast_module.project(snap)
+    incidents = clustering.for_snapshot(snap)[:5]
+    watching = [{**next(r for r in snap.rows if r["shipment_id"] == sid), "reasons": w["reasons"]} for sid, w in sorted(snap.watch.items())]
     options = [n for n in (1, 3, 5) if n <= max(1, limits.remaining())]
     return render_template(
         "dashboard.html", snap=snap, var=snap.var, top=sorted((r for r in snap.rows if r["rank"]), key=lambda r: r["rank"])[:10],
         state_bar=charts.state_bar(counts),
         carrier_chart=charts.bar_chart(sorted(((k, v, "c-acc") for k, v in by_carrier.items()), key=lambda i: -i[1]), usd_fmt, label="Exposure by carrier"),
         cause_chart=charts.bar_chart(sorted(((k, v, "c-unk" if k == "Not analyzed" else "c-warn") for k, v in by_cause.items()), key=lambda i: -i[1]), usd_fmt, label="Exposure by root cause"),
-        status=status, options=options, cost_note=cost_estimate(1), batch=batch, error=error)
+        status=status, options=options, cost_note=cost_estimate(1), batch=batch, error=error,
+        incidents=incidents, watching=watching, forecast=fc, forecast_chart=charts.forecast_chart(fc["points"]))
 
 
 @bp.post("/analyze-top")
@@ -227,7 +241,10 @@ def rules_case(shipment_id: str, error: str | None = None, code: int = 200):
     snap = pipeline.snapshot()
     a = exception_or_404(snap, shipment_id)
     latest = store.latest_case_for(a["shipment_id"], snap.dataset_name)
-    return render_template("case.html", case=live_case(snap, a), saved=None, live=True, error=error, latest=latest, snap=snap, history=[], feedback=[]), code
+    case = live_case(snap, a)
+    book, steps = playbooks.for_case(case)
+    return render_template("case.html", case=case, saved=None, live=True, error=error, latest=latest, snap=snap, history=[], feedback=[],
+                           trace=None, playbook_name=book, playbook_steps=steps, ticks={}), code
 
 
 @bp.post("/case/<shipment_id>/analyze")
@@ -269,9 +286,46 @@ def case_detail(case_id: int):
     current = snap.by_id.get(saved["shipment_id"])
     saved["stale"] = current is None or saved["input_hash"] != pipeline.rules_hash(current) or saved["dataset"] != snap.dataset_name
     saved["disposition"] = store.latest_dispositions([case_id]).get(case_id, {"status": "new", "owner": None, "note": None})
-    return render_template("case.html", case=saved["case"], saved=saved, live=False, error=None, latest=None, snap=snap,
+    book, steps = playbooks.for_case(saved["case"])
+    role = approvals.needs_request(saved["case"])
+    current = store.approval_current(case_id) if role else None
+    approval = {"role": role, "role_label": approvals.ROLE_LABELS.get(role, role), "current": current,
+                "next": approvals.next_statuses(current["status"] if current else None), "history": store.approval_history(case_id)} if role else None
+    return render_template("case.html", case=saved["case"], saved=saved, live=False, approval=approval, error=None, latest=None, snap=snap,
                            history=store.disposition_history(case_id), feedback=store.feedback_for(case_id),
-                           statuses=store.DISPOSITIONS, verdicts=store.VERDICTS)
+                           statuses=store.DISPOSITIONS, verdicts=store.VERDICTS, trace=store.trace_for_case(case_id),
+                           playbook_name=book, playbook_steps=steps, ticks=store.playbook_state(case_id))
+
+
+@bp.post("/cases/<int:case_id>/approval")
+def set_approval(case_id: int):
+    """Draft a request, or record the status a human reports (requested, approved, declined). Nothing is sent."""
+    security.check_csrf()
+    saved = store.get_case(case_id)
+    if saved is None:
+        abort(404)
+    role = approvals.needs_request(saved["case"])
+    if role is None:
+        abort(400)
+    current = store.approval_current(case_id)
+    status = request.form.get("status", "")
+    if status not in approvals.next_statuses(current["status"] if current else None):
+        abort(400)
+    draft = approvals.build_draft(saved["case"]) if status == "drafted" else None
+    store.add_approval_event(case_id, role, status, draft, request.form.get("actor"), request.form.get("note"))
+    return redirect(url_for("views.case_detail", case_id=case_id) + "#approval", 303)
+
+
+@bp.post("/cases/<int:case_id>/playbook")
+def set_playbook(case_id: int):
+    security.check_csrf()
+    saved = store.get_case(case_id)
+    if saved is None:
+        abort(404)
+    _, steps = playbooks.for_case(saved["case"])
+    ids = [s["id"] for s in steps]
+    store.set_playbook(case_id, {d for d in request.form.getlist("done") if d in ids}, ids)
+    return redirect(url_for("views.case_detail", case_id=case_id) + "#playbook", 303)
 
 
 @bp.post("/cases/<int:case_id>/disposition")
@@ -298,6 +352,84 @@ def set_feedback(case_id: int):
     return redirect(url_for("views.case_detail", case_id=case_id), 303)
 
 
+# ---------------------------------------------------------------- ask the queue
+@bp.get("/ask")
+def ask(error: str | None = None, result=None, question: str = "", code: int = 200):
+    return render_template("ask.html", snap=pipeline.snapshot(), asks=store.list_asks(10), error=error, result=result, question=question,
+                           max_chars=ask_module.MAX_QUESTION_CHARS), code
+
+
+@bp.post("/ask")
+def ask_post():
+    security.check_csrf()
+    question = " ".join(request.form.get("question", "").split())[:ask_module.MAX_QUESTION_CHARS]
+    if not question:
+        abort(400)
+    kind, outcome, message = ask_module.ask_with_cap(question)
+    if kind == "ok":
+        return ask(result=outcome, question=question)
+    return ask(error=message, question=question, code=429 if kind == "limit" else 200)
+
+
+# ---------------------------------------------------------------- incidents and claims
+@bp.get("/incidents/<incident_id>")
+def incident(incident_id: str):
+    snap = pipeline.snapshot()
+    found = clustering.find(clustering.for_snapshot(snap), incident_id)
+    if found is None:
+        abort(404)
+    return render_template("incident.html", snap=snap, inc=found, status=case_status(snap))
+
+
+@bp.get("/claims/<shipment_id>")
+def claim(shipment_id: str):
+    snap = pipeline.snapshot()
+    a = snap.by_id.get(shipment_id.upper())
+    if a is None or a["state"] != "delivered_late":
+        abort(404)
+    data = a.get("_data") or {}
+    order, tracking = data["order_context"], data["get_tracking_status"]
+    steps = rules.penalty_steps(order, a["hours_late_now"])
+    events, duplicates = timeline_view(snap, a)
+    carrier = snap.dataset["carriers"].get(tracking["carrier_id"])
+    return render_template("claim.html", snap=snap, a=a, order=order, steps=steps, events=events, duplicates=duplicates, carrier=carrier,
+                           claim_link=f"{carrier['claim_url']}{a['shipment_id']}" if carrier and carrier.get("claim_url") else None,
+                           text=claims.claim_text(a, order, carrier, steps, events))
+
+
+# ---------------------------------------------------------------- handoff
+TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def handoff_report(since: str | None, dataset: str) -> dict[str, Any]:
+    """Grouped changes since a chosen UTC time (YYYY-MM-DDTHH:MM:SSZ) or, by default, the last reviewed marker."""
+    marker = store.get_setting("handoff_reviewed")
+    chosen = None
+    if since:
+        try:
+            datetime.strptime(since, TS_FORMAT)
+            chosen = since
+        except ValueError:
+            chosen = None
+    w = handoff_module.window(marker, chosen)
+    report = handoff_module.build(store.list_cases(dataset), store.dispositions_for_dataset(dataset), w)
+    report.update(marker=marker, since=chosen, bad_since=bool(since) and chosen is None)
+    return report
+
+
+@bp.get("/handoff")
+def handoff():
+    snap = pipeline.snapshot()
+    return render_template("handoff.html", snap=snap, report=handoff_report(request.args.get("since"), snap.dataset_name))
+
+
+@bp.post("/handoff/review")
+def handoff_review():
+    security.check_csrf()
+    store.set_setting("handoff_reviewed", {**store.max_ids(), "at": store._now(), "by": (request.form.get("by") or "").strip()[:80] or None})
+    return redirect(url_for("views.handoff"), 303)
+
+
 # ---------------------------------------------------------------- runs and eval
 @bp.get("/runs")
 def runs():
@@ -315,7 +447,11 @@ def evaluation():
         history = [json.loads(line) for line in (config.ROOT / "eval_history.jsonl").read_text(encoding="utf-8").splitlines()[-30:] if line.strip()][::-1]
     except (OSError, ValueError):
         pass
-    return render_template("eval.html", results=results, history=history)
+    cards = eval_view.scorecards(results["results"]) if results else []
+    t = eval_view.trend(history)
+    return render_template("eval.html", results=results, history=history, cards=cards,
+                           rate_chart=charts.trend_chart(t["pass_rate"], lambda v: f"{v:.0f}%", label="Eval pass rate across stored runs"),
+                           token_chart=charts.trend_chart(t["tokens"], lambda v: f"{v:,.0f}", label="Tokens used across stored runs"))
 
 
 # ---------------------------------------------------------------- carriers and digest
@@ -366,13 +502,57 @@ def _persist() -> None:
     pipeline.clear_cache()
 
 
+def replay_state() -> dict[str, Any]:
+    """Where the replay is and what the queue looks like right now (also served as JSON to the play button)."""
+    import tools
+    snap = pipeline.snapshot()
+    dataset = tools.load_dataset()
+    active = bool(sim.replay_utc())
+    info = replay_module.state(dataset, rules.parse_ts(sim.replay_utc()) if active else pipeline.now_of(dataset))
+    top = sorted((r for r in snap.rows if r["rank"]), key=lambda r: r["rank"])[:5]
+    return {"active": active, **info, "at_end": active and info["now_utc"] == info["end_utc"], "shipments_visible": len(snap.rows),
+            "shipments_total": len(dataset["shipments"]), "active_exceptions": snap.var["active_exceptions"],
+            "revenue_exposed_usd": snap.var["revenue_exposed_usd"], "sim_now_utc": snap.sim_now_utc,
+            "top": [{"shipment_id": r["shipment_id"], "state": r["state"], "exposure_usd": r["exposure_usd"]} for r in top]}
+
+
+def replay_apply(action: str, hours: float | None = None) -> None:
+    """start (at the earliest time), step (forward only, capped at the data's own time), end, or stop. Persists the state."""
+    import tools
+    dataset = tools.load_dataset()
+    end = replay_module.end_time(dataset)
+    if action == "start":
+        sim.set_replay(rules.iso(replay_module.start_time(dataset)))
+    elif action == "end":
+        sim.set_replay(rules.iso(end))
+    elif action == "stop":
+        sim.set_replay(None)
+    elif action == "step":
+        if not sim.replay_utc() or hours is None or not 0 < hours <= 24 * 30:
+            raise ValueError("step needs an active replay and 0 < hours <= 720")
+        sim.set_replay(rules.iso(min(rules.parse_ts(sim.replay_utc()) + timedelta(hours=hours), end)))
+    else:
+        raise ValueError("unknown replay action")
+    _persist()
+
+
+@bp.post("/simulate/replay/<action>")
+def simulate_replay(action: str):
+    security.check_csrf()
+    try:
+        replay_apply(action, float(request.form["hours"]) if request.form.get("hours") else None)
+    except (ValueError, KeyError):
+        abort(400)
+    return redirect(url_for("views.simulate") + "#replay", 303)
+
+
 @bp.get("/simulate")
 def simulate():
     snap = pipeline.snapshot()
     scheduled = tools_schedule()
     return render_template("simulate.html", snap=snap, overrides=sim.overrides(), scheduled=scheduled, faults=sim.FAULTS,
                            tool_names=("get_tracking_status", "order_context", "event_timeline"), ids=[r["shipment_id"] for r in snap.rows],
-                           saved_cases=len(store.list_cases(snap.dataset_name)))
+                           saved_cases=len(store.list_cases(snap.dataset_name)), replay=replay_state(), csrf=security.csrf_token())
 
 
 def tools_schedule() -> dict[str, Any]:

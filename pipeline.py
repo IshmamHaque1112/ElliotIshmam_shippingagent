@@ -9,9 +9,11 @@ from typing import Any, Callable
 
 import config
 import fetch as fetch_module
+import replay
 import rules
 import sim
 import tools
+import watch as watch_module
 from mock_service import MockService
 
 EXCEPTION_STATES = ("delayed", "at_risk", "unable_to_verify", "delivered_late")
@@ -19,11 +21,16 @@ EXCEPTION_STATES = ("delayed", "at_risk", "unable_to_verify", "delivered_late")
 
 def load_service() -> MockService:
     """A fresh mock service (fresh call counts) with any simulation fault overrides applied."""
-    return MockService(tools.load_dataset(), sim.merged_faults(tools.load_fault_schedule()))
+    dataset = tools.load_dataset()
+    if sim.replay_utc():  # an earlier view of the same data: later events are hidden, never invented
+        dataset = replay.visible(dataset, rules.parse_ts(sim.replay_utc()))
+    return MockService(dataset, sim.merged_faults(tools.load_fault_schedule()))
 
 
 def now_of(dataset: dict[str, Any]):
     """Simulated time: the dataset's clock plus the forward-only simulation offset. Never the real clock."""
+    if sim.replay_utc():
+        return rules.parse_ts(sim.replay_utc())
     base = rules.parse_ts(dataset["meta"]["simulated_now_utc"]).astimezone(timezone.utc)
     return base + timedelta(hours=sim.offset_hours())
 
@@ -84,6 +91,7 @@ class Snapshot:
     queue: list[dict[str, Any]] = field(default_factory=list)
     var: dict[str, Any] = field(default_factory=dict)
     rows: list[dict[str, Any]] = field(default_factory=list)
+    watch: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def _row(sh: dict[str, Any], a: dict[str, Any], dataset: dict[str, Any], rank: int | None) -> dict[str, Any]:
@@ -124,7 +132,7 @@ def snapshot() -> Snapshot:
         by_id = {a["shipment_id"]: a for a in assessments}
         rows = [_row(sh, by_id[sh["shipment_id"]], service.dataset, ranks.get(sh["shipment_id"])) for sh in service.dataset["shipments"]]
         snap = Snapshot(key[0], rules.iso(now_of(service.dataset)), service.dataset, assessments, by_id, queue,
-                        value_at_risk(assessments), rows)
+                        value_at_risk(assessments), rows, watch_module.compute(assessments, rules.iso(now_of(service.dataset))))
         _cache.clear()   # keep only the latest state; the cache is tiny
         _cache[key] = snap
         return snap

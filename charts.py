@@ -104,3 +104,55 @@ def penalty_chart(order: dict[str, Any], late_now: float | None, projected_late:
     parts.append(f'<text class="ct" x="{l}" y="{height - 8}">0h late</text><text class="ct" x="{width - r}" y="{height - 8}" text-anchor="end">{x_max:.0f}h late</text>'
                  f'<text class="ct" x="{l - 6}" y="{height - b}" text-anchor="end">$0</text>')
     return _svg(width, height, "".join(parts), "Penalty as a function of hours late")
+
+
+def forecast_chart(points: list[dict[str, Any]], width: int = 560, height: int = 200) -> Markup:
+    """Active exposure now and at each horizon (x spacing proportional to hours). Pure SVG, colors from CSS classes."""
+    if len(points) < 2:
+        return Markup('<p class="muted">No forecast.</p>')
+    l, r, t, b = 64, 64, 20, 30
+    x_max = max(p["hours"] for p in points) or 1
+    lo = min(p["active_exposure_usd"] for p in points)
+    hi = max(p["active_exposure_usd"] for p in points)
+    span = max(hi - lo, 1.0)
+    sx = lambda h: l + (width - l - r) * h / x_max
+    sy = lambda v: t + (height - t - b) * (1 - (v - lo) / span)
+    line = " ".join(f"{sx(p['hours']):.1f},{sy(p['active_exposure_usd']):.1f}" for p in points)
+    parts = [f'<line class="axis" x1="{l}" y1="{t}" x2="{l}" y2="{height - b}"/><line class="axis" x1="{l}" y1="{height - b}" x2="{width - r}" y2="{height - b}"/>',
+             f'<polyline class="seg-later" points="{line}"/>']
+    last_x = -1000.0
+    for p in points:
+        label = "now" if p["hours"] == 0 else f"+{p['hours']}h"
+        x, y = sx(p["hours"]), sy(p["active_exposure_usd"])
+        show_value = x - last_x >= 60  # skip a value label that would overlap the previous one (the dot keeps a tooltip)
+        if show_value:
+            last_x = x
+        parts.append(f'<circle class="pt" cx="{x:.1f}" cy="{y:.1f}" r="4"><title>{escape(label)}: ${p["active_exposure_usd"]:,.0f}</title></circle>'
+                     f'<text class="ct" x="{x:.1f}" y="{height - 8}" text-anchor="middle">{escape(label)}</text>'
+                     + (f'<text class="ct" x="{x:.1f}" y="{y - 9:.1f}" text-anchor="middle">${p["active_exposure_usd"]:,.0f}</text>' if show_value else ""))
+    return _svg(width, height, "".join(parts), "Active exposure if nothing changes")
+
+
+def trend_chart(series: dict[str, list[float | None]], fmt=lambda v: f"{v:,.0f}", label: str = "Trend", width: int = 560, height: int = 180) -> Markup:
+    """One line per series (for example per model) across stored runs, oldest on the left. None values leave a gap."""
+    n = max((len(v) for v in series.values()), default=0)
+    values = [x for v in series.values() for x in v if x is not None]
+    if n < 1 or not values:
+        return Markup('<p class="muted">Not enough runs yet.</p>')
+    l, r, t, b = 64, 16, 16, 26
+    lo, hi = min(0.0, min(values)), max(values) or 1.0
+    sx = lambda i: l + (width - l - r) * (i / (n - 1) if n > 1 else 0.5)
+    sy = lambda v: t + (height - t - b) * (1 - (v - lo) / ((hi - lo) or 1.0))
+    parts = [f'<line class="axis" x1="{l}" y1="{t}" x2="{l}" y2="{height - b}"/><line class="axis" x1="{l}" y1="{height - b}" x2="{width - r}" y2="{height - b}"/>',
+             f'<text class="ct" x="{l - 6}" y="{t + 10}" text-anchor="end">{escape(fmt(hi))}</text><text class="ct" x="{l - 6}" y="{height - b}" text-anchor="end">{escape(fmt(lo))}</text>',
+             f'<text class="ct" x="{l}" y="{height - 8}">oldest</text><text class="ct" x="{width - r}" y="{height - 8}" text-anchor="end">newest run</text>']
+    legend = []
+    for k, (name, vals) in enumerate(sorted(series.items())):
+        cls = f"tr{k % 4}"
+        pts = [(i, v) for i, v in enumerate(vals) if v is not None]
+        if len(pts) > 1:
+            parts.append(f'<polyline class="{cls}" points="{" ".join(f"{sx(i):.1f},{sy(v):.1f}" for i, v in pts)}"/>')
+        for i, v in pts:
+            parts.append(f'<circle class="{cls}d" cx="{sx(i):.1f}" cy="{sy(v):.1f}" r="4"><title>{escape(name)}: {escape(fmt(v))}</title></circle>')
+        legend.append(f'<span class="key"><i class="sw {cls}d"></i>{escape(name)}</span>')
+    return Markup(f'{_svg(width, height, "".join(parts), label)}<p class="legend">{"".join(legend)}</p>')

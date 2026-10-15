@@ -7,6 +7,7 @@ from typing import Any
 
 _lock = Lock()
 _offset_hours = 0.0
+_replay_utc: str | None = None   # when set, the dataset is shown as of this time (see replay.py)
 _overrides: dict[str, dict[str, Any]] = {}   # shipment id -> tool -> fault spec, or None to switch a scheduled fault off
 
 FAULTS = ("http_429", "http_503", "malformed_json")
@@ -26,10 +27,21 @@ def advance(hours: float) -> float:
         return _offset_hours
 
 
+def replay_utc() -> str | None:
+    return _replay_utc
+
+
+def set_replay(value: str | None) -> None:
+    global _replay_utc
+    with _lock:
+        _replay_utc = value
+
+
 def reset() -> None:
-    global _offset_hours
+    global _offset_hours, _replay_utc
     with _lock:
         _offset_hours = 0.0
+        _replay_utc = None
         _overrides.clear()
 
 
@@ -67,16 +79,17 @@ def merged_faults(schedule: dict[str, Any]) -> dict[str, Any]:
 
 def key() -> str:
     """Changes whenever anything that affects the rules output changes (used to invalidate the cache)."""
-    return json.dumps([_offset_hours, overrides()], sort_keys=True)
+    return json.dumps([_offset_hours, overrides(), _replay_utc], sort_keys=True)
 
 
 def export() -> dict[str, Any]:
-    return {"offset_hours": _offset_hours, "overrides": overrides()}
+    return {"offset_hours": _offset_hours, "overrides": overrides(), "replay_utc": _replay_utc}
 
 
 def load(state: dict[str, Any] | None) -> None:
-    global _offset_hours
+    global _offset_hours, _replay_utc
     with _lock:
         _offset_hours = float((state or {}).get("offset_hours", 0.0))
+        _replay_utc = (state or {}).get("replay_utc")
         _overrides.clear()
         _overrides.update((state or {}).get("overrides", {}))

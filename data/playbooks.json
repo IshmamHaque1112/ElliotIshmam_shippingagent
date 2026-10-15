@@ -1,0 +1,157 @@
+{
+  "_note": "Code-owned checklists for a human dispatcher. Claude does not write or change these. Nothing here sends or books anything.",
+  "Weather": [
+    {
+      "id": "weather-1",
+      "text": "Confirm the weather event and affected lanes on the carrier's service-alert page."
+    },
+    {
+      "id": "weather-2",
+      "text": "Check whether the carrier has published a recovery date for the corridor."
+    },
+    {
+      "id": "weather-3",
+      "text": "Ask the carrier for a revised delivery estimate in writing."
+    },
+    {
+      "id": "weather-4",
+      "text": "Tell the customer the delay is weather related and when you will update them next."
+    },
+    {
+      "id": "weather-5",
+      "text": "Check the contract: weather is often excluded from penalties, so confirm before claiming."
+    }
+  ],
+  "Hub Bottleneck": [
+    {
+      "id": "hub-bottleneck-1",
+      "text": "Call the carrier's hub contact and ask for the outbound slot or trailer assignment."
+    },
+    {
+      "id": "hub-bottleneck-2",
+      "text": "Ask whether the shipment can be pulled from the hub and expedited."
+    },
+    {
+      "id": "hub-bottleneck-3",
+      "text": "Compare the cost of the ranked mitigation options against the penalty avoided."
+    },
+    {
+      "id": "hub-bottleneck-4",
+      "text": "Check for other shipments held at the same hub and raise them together."
+    },
+    {
+      "id": "hub-bottleneck-5",
+      "text": "Tell the customer the last scan, the revised ETA and the next update time."
+    }
+  ],
+  "Customs": [
+    {
+      "id": "customs-1",
+      "text": "Check the customs hold reason and any documents the broker is waiting for."
+    },
+    {
+      "id": "customs-2",
+      "text": "Confirm commercial invoice, HS codes and consignee details are complete."
+    },
+    {
+      "id": "customs-3",
+      "text": "Contact the broker for a clearance estimate."
+    },
+    {
+      "id": "customs-4",
+      "text": "Tell the customer a customs hold is in progress and what is needed from them, if anything."
+    },
+    {
+      "id": "customs-5",
+      "text": "Note the hold start time for any later claim."
+    }
+  ],
+  "Address/Recipient Issue": [
+    {
+      "id": "address-recipient-issue-1",
+      "text": "Verify the delivery address and contact details against the order record."
+    },
+    {
+      "id": "address-recipient-issue-2",
+      "text": "Contact the recipient to confirm availability or correct the address."
+    },
+    {
+      "id": "address-recipient-issue-3",
+      "text": "Ask the carrier to hold or reattempt delivery with the corrected details."
+    },
+    {
+      "id": "address-recipient-issue-4",
+      "text": "Record who was contacted and when."
+    },
+    {
+      "id": "address-recipient-issue-5",
+      "text": "Check whether the delay is the recipient's responsibility before any penalty claim."
+    }
+  ],
+  "Carrier Capacity": [
+    {
+      "id": "carrier-capacity-1",
+      "text": "Ask the carrier when capacity is expected to free up and for a firm ETA."
+    },
+    {
+      "id": "carrier-capacity-2",
+      "text": "Price an alternate carrier or expedited service for this shipment."
+    },
+    {
+      "id": "carrier-capacity-3",
+      "text": "Check whether the VIP or contract terms allow a different service level."
+    },
+    {
+      "id": "carrier-capacity-4",
+      "text": "Tell the customer the new expected date, with the carrier's reason stated plainly."
+    },
+    {
+      "id": "carrier-capacity-5",
+      "text": "Log the delay for the carrier's performance review."
+    }
+  ],
+  "Unknown": [
+    {
+      "id": "unknown-1",
+      "text": "Call the carrier and ask for the exact reason and the next expected scan."
+    },
+    {
+      "id": "unknown-2",
+      "text": "Check the raw event timeline for conflicting or missing scans."
+    },
+    {
+      "id": "unknown-3",
+      "text": "Do not promise a delivery date until the carrier confirms one."
+    },
+    {
+      "id": "unknown-4",
+      "text": "Re-run the analysis after new scans arrive."
+    },
+    {
+      "id": "unknown-5",
+      "text": "Tell the customer you are verifying and when you will follow up."
+    }
+  ],
+  "Generic": [
+    {
+      "id": "generic-1",
+      "text": "Open the shipment detail and read the latest scans."
+    },
+    {
+      "id": "generic-2",
+      "text": "Contact the carrier for the current status and next expected scan."
+    },
+    {
+      "id": "generic-3",
+      "text": "Review the ranked options and their net benefit."
+    },
+    {
+      "id": "generic-4",
+      "text": "Decide whether the customer needs an update now."
+    },
+    {
+      "id": "generic-5",
+      "text": "Record your decision as a disposition on the case."
+    }
+  ]
+}
