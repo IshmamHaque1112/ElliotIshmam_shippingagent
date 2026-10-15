@@ -9,6 +9,7 @@ jobs:
         with: { python-version: "3.11" }
       - run: pip install -r requirements.txt
       - run: python -m pytest -q
+      - run: python scripts/check_contrast.py
       - run: python eval.py --no-llm --dataset dev
       - run: python eval.py --no-llm --dataset extended
       # Live evals spend credits and need a key: run them by hand (python eval.py), not in CI.

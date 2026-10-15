@@ -15,7 +15,15 @@ ASK_WORDS = re.compile(r"\b(please|confirm|provide|advise|expedite|release|share
 LAST_SCAN_WORDS = re.compile(r"last (confirmed )?scan|latest scan|last checkpoint|last seen|most recent scan", re.I)
 CHECKPOINT_FACILITY = re.compile(r"^(.*?)\s+[A-Z_]{4,},")  # "Chicago Hub ARRIVED, Oct 6 ..." -> "Chicago Hub"
 
-CRITERIA = ("shipment id", "last scan", "ETA vs promise", "specific ask", "no promised credit, refund or cancellation")
+CONTACT_DETAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\(\d{3}\)\s?\d{3}-\d{4}|\b\d{3}[-.\s]\d{3,4}(?:[-.\s]\d{4})?\b|\b\d{5}(?:-\d{4})?\b")
+
+CRITERIA = ("shipment id", "last scan", "ETA vs promise", "specific ask", "no promised credit, refund or cancellation", "no invented contact details")
+
+
+def invented_details(case: dict[str, Any], text: str) -> list[str]:
+    """Phone numbers, emails and postal codes in the drafts that appear nowhere in the case's own data."""
+    known = json.dumps({k: v for k, v in case.items() if k != "drafts"}, default=str)
+    return sorted({d for d in CONTACT_DETAIL.findall(text) if d not in known})
 
 
 def facility_of(latest_checkpoint: str | None) -> str | None:
@@ -38,6 +46,7 @@ def check_drafts(case: dict[str, Any]) -> list[tuple[str, bool, str]]:
         ("ETA vs promise", bool(ETA_WORDS.search(email) and PROMISE_WORDS.search(email)), "customer email compares the ETA with the promise"),
         ("specific ask", bool(ASK_WORDS.search(inquiry)), "carrier inquiry makes a specific request"),
         ("no promised credit, refund or cancellation", found is None, found.group(0) if found else ""),
+        ("no invented contact details", not invented_details(case, both), ", ".join(invented_details(case, both)) or "every phone, email and postal code comes from the case data"),
     ]
 
 

@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_macros.html" import chip %}
+{% block title %}Early warning{% endblock %}
+{% block body %}
+<h1>Early warning</h1><p class="sub">Did the rules flag each late shipment before the carrier's own data admitted a problem? Measured on the {{ snap.dataset_name }} demo data as of {{ ew.as_of_utc }}.</p>
+<section class="cards" aria-label="Summary">
+  <div class="card"><span>Late shipments measured</span><strong>{{ ew.summary.measured }}</strong></div>
+  <div class="card"><span>Flagged earlier</span><strong>{{ ew.summary.counts.earlier }}</strong></div>
+  <div class="card"><span>Same moment</span><strong>{{ ew.summary.counts.same_time }}</strong></div>
+  <div class="card"><span>Flagged later</span><strong>{{ ew.summary.counts.later }}</strong></div>
+  <div class="card"><span>Median lead</span><strong>{{ ew.summary.median_lead_hours|hrs }}</strong></div>
+</section>
+{% if ew.summary.headline %}<p>{{ ew.summary.headline }}</p>{% endif %}
+<section class="panel"><h2>How it is measured</h2>
+  <ul>
+    <li><b>Flagged</b> is the first moment the rules, seeing only what had happened by then, said at risk or delayed.</li>
+    <li><b>The carrier admits a problem</b> at the earliest of a scan that says so (exception, held, customs hold, delivery attempted), the carrier's own ETA moving past the promise, or the promise time passing without a delivery. Carrier notes are free text and are never used.</li>
+    <li>If the carrier admitted it before the shipment had both a scan and an ETA to look at, the admission is counted from that first look.</li>
+    <li>Shipments the rules cannot assess, flagged ones that recovered, and false alarms are listed separately and are not averaged in.</li>
+    <li>This measures this dataset only. It says nothing about how real carriers behave.</li>
+  </ul></section>
+<section class="panel"><h2>Shipments</h2>
+  {% if ew.rows %}<div class="scroll"><table><thead><tr><th>Shipment</th><th>Result</th><th class="num">Lead</th><th>Rules flagged (UTC)</th><th>Carrier admitted (UTC)</th><th>Signal</th></tr></thead><tbody>
+  {% for r in ew.rows %}<tr><td><a href="/shipments/{{ r.shipment_id }}">{{ r.shipment_id }}</a></td><td>{{ ew.labels[r.category] }}</td><td class="num">{{ r.lead_hours|hrs if r.lead_hours is not none else '-' }}</td><td>{{ r.flagged_at or '-' }}</td><td>{{ r.admitted_at or '-' }}</td><td>{{ r.admission_signal or r.note or '-' }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Nothing to measure yet.</p>{% endif %}
+</section>
+{% endblock %}

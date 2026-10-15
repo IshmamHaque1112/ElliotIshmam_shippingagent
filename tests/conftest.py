@@ -16,7 +16,6 @@ def isolated(monkeypatch, tmp_path):
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     sim.reset()
     pipeline.clear_cache()
-    limits.count = 0
     import app as webapp
     webapp._loaded_for = None
     webapp.app.config.update(TESTING=True)

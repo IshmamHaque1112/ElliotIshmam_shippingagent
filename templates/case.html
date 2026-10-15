@@ -3,7 +3,7 @@
 {% block body %}
 <p><a href="/cases">&larr; Cases</a> · <a href="/shipments/{{ case.shipment_id }}">Shipment detail</a></p>
 {% if live %}<div class="banner info">Live rules-only view; not saved. {% if latest %}<a href="/cases/{{ latest.id }}">Open the latest saved case (#{{ latest.id }})</a>.{% endif %}</div>
-  <div class="row panel"><form class="inline" method="post" action="/case/{{ case.shipment_id }}/report"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Save rules-only case</button></form>{{ analyze_button(case.shipment_id) }}<span class="muted">Claude analyses count against the demo limit ({{ remaining }} left).</span></div>
+  <div class="row panel"><form class="inline" method="post" action="/case/{{ case.shipment_id }}/report"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Save rules-only case</button></form>{{ analyze_button(case.shipment_id) }}<span class="muted">Claude analyses count against today's limit ({{ remaining }} left).</span></div>
 {% else %}
   {% if saved.stale %}<div class="banner warn" role="status"><b>Stale.</b> The rules output has changed since this case was saved (for example the simulated clock moved). Numbers below are from the time it was saved.</div>{% endif %}
   {% if case.narrative != 'claude' %}<div class="banner info"><b>Fallback case file.</b> Built from rules only, with no AI narrative. Every number is still computed by code.</div>{% endif %}

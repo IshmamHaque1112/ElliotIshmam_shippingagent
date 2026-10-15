@@ -1,10 +1,18 @@
+# Local run or a single small server:  docker compose up --build
+# Secrets come from .env (never baked into the image): ANTHROPIC_API_KEY, DEMO_USERNAME, DEMO_PASSWORD, FLASK_SECRET_KEY.
+# Behind a TLS proxy, also set TRUST_PROXY_HOPS=1 and COOKIE_SECURE=true (see docs/DEPLOY.md).
 services:
   copilot:
     build: .
     ports: ["8000:8000"]
-    env_file: .env          # ANTHROPIC_API_KEY, DEMO_USERNAME, DEMO_PASSWORD, FLASK_SECRET_KEY (never baked into the image)
+    env_file: .env
     environment:
-      DATASET: extended
+      DATASET: dev            # the dataset a new sign-in starts on; the header toggle switches per session
+      RUNS_DB: /data/runs.db
     volumes: ["copilot-data:/data"]
+    restart: unless-stopped
+    read_only: true           # the app only writes to /data and /tmp
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
 volumes:
   copilot-data:

@@ -8,6 +8,7 @@
 {% if a.state == 'unable_to_verify' %}<div class="banner err" role="alert"><b>Unable to verify.</b> {{ a.reasons|join('; ') }}. Status is not shown as fact; a person should verify with the carrier.
   {% for tool, msg in a.fetch_errors.items() %}<br>{{ tool }}: {{ msg }}{% endfor %}</div>{% endif %}
 {% if snap.watch.get(a.shipment_id) %}<div class="banner info" role="status">{{ chip('watch') }} <b>On watch.</b> {{ snap.watch[a.shipment_id].reasons|join('; ') }}. Still on track by the rules.</div>{% endif %}
+{% if early %}<div class="banner info" role="status"><b>Early warning.</b> {{ early_labels[early.category] }}.{% if early.flagged_at %} Rules flagged it {{ early.flagged_at }} UTC.{% endif %}{% if early.admitted_at %} The carrier's own data admitted it {{ early.admitted_at }} UTC ({{ early.admission_signal }}).{% endif %}{% if early.lead_hours is not none %} Lead: {{ early.lead_hours|num }} h.{% endif %}</div>{% endif %}
 <div class="row">{% if a.state == 'delivered_late' %}<a class="btn" href="/claims/{{ a.shipment_id }}">Claim packet</a>{% endif %}{% if is_exception %}<a class="btn" href="/case/{{ a.shipment_id }}">Open case file</a>{{ analyze_button(a.shipment_id) }}{% endif %}</div>
 <section class="panel"><h2>Facts</h2><dl class="facts">
   <div><dt>Order</dt><dd>{{ row.order_id }} · {{ row.order_value_usd|usd }}</dd></div><div><dt>Carrier</dt><dd>{{ row.carrier }} · {{ row.service_level }}</dd></div>

@@ -54,8 +54,12 @@ def test_pages_use_no_inline_styles_or_external_assets():
     assert "/static/app.css" in r.get_data(as_text=True) and get("/static/app.css").status_code == 200
 
 
-def test_static_files_also_need_the_login():
-    assert client().get("/static/app.css").status_code == 401
+def test_static_files_are_public_so_the_login_page_can_use_them():
+    for path in ("/static/app.css", "/static/app.js", "/static/loading.gif"):
+        assert client().get(path).status_code == 200, path
+    import glob, os
+    names = sorted(os.path.basename(p) for p in glob.glob(str(webapp.app.static_folder) + "/*"))
+    assert names == ["app.css", "app.js", "loading.gif"]   # nothing but the page assets is ever public
 
 
 def test_dashboard_shows_value_at_risk_and_ranked_top_rows():
@@ -126,7 +130,7 @@ def test_claude_case_redirects_to_saved_page_with_readonly_drafts(monkeypatch):
     assert r.status_code == 303
     html = get(r.headers["Location"]).get_data(as_text=True)
     assert html.count("readonly") >= 2 and "Hub Bottleneck" in html and "Re-analyze with Claude" in html and "Fallback case file" not in html
-    assert limits.count == 1 and "ok" in get("/runs").get_data(as_text=True)
+    assert limits.used() == 1 and "ok" in get("/runs").get_data(as_text=True)
 
 
 def test_stale_and_fallback_banners(monkeypatch):
@@ -168,11 +172,11 @@ def test_posts_need_csrf_and_login():
 
 
 def test_cap_missing_key_and_connection_behaviour_in_the_ui(monkeypatch):
-    monkeypatch.setattr(limits, "count", limits.MAX_ANALYSES)
+    limits.set_used(limits.MAX_ANALYSES)
     monkeypatch.setattr(webapp.views.analysis.agent, "make_client", lambda: (_ for _ in ()).throw(AssertionError("must not run")))
     r = post("/case/SH-1004/analyze")
     assert r.status_code == 429 and b"analysis limit" in r.data and b"rules-only case file" in r.data
-    monkeypatch.setattr(limits, "count", 0)
+    limits.set_used(0)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None, raising=False)
     monkeypatch.undo() if False else None
@@ -182,17 +186,17 @@ def test_cap_missing_key_and_connection_behaviour_in_the_ui(monkeypatch):
     monkeypatch.setattr(webapp.views.analysis.agent, "make_client", no_key)
     for _ in range(limits.MAX_ANALYSES + 1):
         assert post("/case/SH-1004/analyze").status_code == 200
-    assert limits.count == 0
+    assert limits.used() == 0
 
 
 def test_analyze_top_skips_fresh_cases_and_respects_the_cap(monkeypatch):
     monkeypatch.setattr(webapp.views.analysis.agent, "make_client", lambda: FakeClient([reply(use(prompt.SUBMIT_TOOL_NAME, good_submission(), str(i))) for i in range(4)]))
     r = post("/analyze-top", {"n": "3"})
     html = r.get_data(as_text=True)
-    assert r.status_code == 200 and "Batch analysis" in html and limits.count == 3
+    assert r.status_code == 200 and "Batch analysis" in html and limits.used() == 3
     assert len(store.list_cases("dev")) == 3
     r = post("/analyze-top", {"n": "1"})   # the next exception that has no fresh Claude case
-    assert limits.count == 4
+    assert limits.used() == 4
     assert post("/analyze-top", {"n": "abc"}).status_code == 400
 
 

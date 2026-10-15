@@ -5,6 +5,7 @@ Cases are never overwritten; every analysis is a new row. The path comes from co
 
 import json
 import sqlite3
+import time
 from contextlib import closing
 from datetime import datetime, timezone
 from typing import Any
@@ -45,6 +46,15 @@ CREATE TABLE IF NOT EXISTS asks(
   id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, question TEXT NOT NULL, answer TEXT, shipment_ids TEXT, status TEXT NOT NULL,
   created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions(
+  sid TEXT PRIMARY KEY, username TEXT NOT NULL, dataset TEXT NOT NULL, created_at TEXT NOT NULL, expires_epoch REAL NOT NULL,
+  revoked INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS session_state(
+  sid TEXT NOT NULL, dataset TEXT NOT NULL, sim_json TEXT NOT NULL, PRIMARY KEY(sid, dataset));
+CREATE TABLE IF NOT EXISTS login_attempts(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, username TEXT NOT NULL, ok INTEGER NOT NULL, at_epoch REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS login_ip ON login_attempts(ip, at_epoch);
+CREATE TABLE IF NOT EXISTS usage_daily(day TEXT NOT NULL, scope TEXT NOT NULL, calls INTEGER NOT NULL, PRIMARY KEY(day, scope));
 CREATE INDEX IF NOT EXISTS cases_shipment ON cases(shipment_id, id);
 CREATE INDEX IF NOT EXISTS disp_case ON dispositions(case_id, id);
 """
@@ -60,6 +70,7 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     if path not in _initialized:
         conn.executescript(SCHEMA)
+        conn.execute("PRAGMA journal_mode=WAL")   # several gunicorn workers share this file
         if "kind" not in {r["name"] for r in conn.execute("PRAGMA table_info(claude_runs)")}:  # databases made before E3
             conn.execute("ALTER TABLE claude_runs ADD COLUMN kind TEXT NOT NULL DEFAULT 'case'")
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
@@ -273,4 +284,106 @@ def get_setting(key: str, default: Any = None) -> Any:
 def set_setting(key: str, value: Any) -> None:
     with closing(connect()) as conn:
         conn.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(value)))
+        conn.commit()
+
+
+# ---- sessions (sign-in). Wall-clock time is fine here: these rows are about people, not about shipments.
+def create_session(sid: str, username: str, dataset: str, lifetime_h: float) -> None:
+    with closing(connect()) as conn:   # tidy up: expired or ended sessions and their saved clocks
+        conn.execute("DELETE FROM session_state WHERE sid IN (SELECT sid FROM sessions WHERE expires_epoch<=? OR revoked=1)", (time.time(),))
+        conn.execute("DELETE FROM sessions WHERE expires_epoch<=? OR revoked=1", (time.time(),))
+        conn.commit()
+    _insert("INSERT INTO sessions(sid,username,dataset,created_at,expires_epoch,revoked) VALUES(?,?,?,?,?,0)",
+            (sid, username, dataset, _now(), time.time() + lifetime_h * 3600))
+
+
+def get_session(sid: str) -> dict[str, Any] | None:
+    """The session if it exists, is not revoked and has not expired."""
+    rows = _rows("SELECT * FROM sessions WHERE sid=? AND revoked=0 AND expires_epoch>?", (sid, time.time()))
+    return rows[0] if rows else None
+
+
+def set_session_dataset(sid: str, dataset: str) -> None:
+    with closing(connect()) as conn:
+        conn.execute("UPDATE sessions SET dataset=? WHERE sid=?", (dataset, sid))
+        conn.commit()
+
+
+def revoke_session(sid: str) -> None:
+    with closing(connect()) as conn:
+        conn.execute("UPDATE sessions SET revoked=1 WHERE sid=?", (sid,))
+        conn.execute("DELETE FROM session_state WHERE sid=?", (sid,))
+        conn.commit()
+
+
+def get_session_sim(sid: str, dataset: str) -> dict[str, Any] | None:
+    rows = _rows("SELECT sim_json FROM session_state WHERE sid=? AND dataset=?", (sid, dataset))
+    return json.loads(rows[0]["sim_json"]) if rows else None
+
+
+def set_session_sim(sid: str, dataset: str, state: dict[str, Any]) -> None:
+    with closing(connect()) as conn:
+        conn.execute("INSERT INTO session_state(sid,dataset,sim_json) VALUES(?,?,?) ON CONFLICT(sid,dataset) DO UPDATE SET sim_json=excluded.sim_json",
+                     (sid, dataset, json.dumps(state, sort_keys=True)))
+        conn.commit()
+
+
+# ---- failed-login throttle
+def record_login(ip: str, username: str, ok: bool) -> None:
+    with closing(connect()) as conn:
+        conn.execute("INSERT INTO login_attempts(ip,username,ok,at_epoch) VALUES(?,?,?,?)", (ip, username[:80], int(ok), time.time()))
+        if ok:   # a good sign-in clears that address's earlier failures
+            conn.execute("DELETE FROM login_attempts WHERE ip=? AND ok=0", (ip,))
+        conn.execute("DELETE FROM login_attempts WHERE at_epoch<?", (time.time() - 86400,))
+        conn.commit()
+
+
+def recent_failures(ip: str, username: str, window_s: float) -> tuple[int, int]:
+    since = time.time() - window_s
+    rows = _rows("SELECT (SELECT COUNT(*) FROM login_attempts WHERE ok=0 AND ip=? AND at_epoch>?) AS by_ip, "
+                 "(SELECT COUNT(*) FROM login_attempts WHERE ok=0 AND username=? AND at_epoch>?) AS by_user", (ip, since, username[:80], since))
+    return int(rows[0]["by_ip"]), int(rows[0]["by_user"])
+
+
+# ---- daily Claude-call counters, shared by every worker on this database
+def reserve_usage(day: str, scopes: list[tuple[str, int]]) -> str | None:
+    """Take one call from every scope in one transaction. Returns None on success, else the scope that is full."""
+    with closing(connect()) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            for scope, cap in scopes:
+                row = conn.execute("SELECT calls FROM usage_daily WHERE day=? AND scope=?", (day, scope)).fetchone()
+                if (row["calls"] if row else 0) >= cap:
+                    conn.rollback()
+                    return scope
+            for scope, _cap in scopes:
+                conn.execute("INSERT INTO usage_daily(day,scope,calls) VALUES(?,?,1) ON CONFLICT(day,scope) DO UPDATE SET calls=calls+1", (day, scope))
+            conn.commit()
+            return None
+        except Exception:
+            conn.rollback()
+            raise
+
+
+def release_usage(day: str, scopes: list[str]) -> None:
+    with closing(connect()) as conn:
+        for scope in scopes:
+            conn.execute("UPDATE usage_daily SET calls=MAX(0,calls-1) WHERE day=? AND scope=?", (day, scope))
+        conn.commit()
+
+
+def usage_count(day: str, scope: str) -> int:
+    rows = _rows("SELECT calls FROM usage_daily WHERE day=? AND scope=?", (day, scope))
+    return int(rows[0]["calls"]) if rows else 0
+
+
+def set_usage(day: str, scope: str, calls: int) -> None:
+    with closing(connect()) as conn:
+        conn.execute("INSERT INTO usage_daily(day,scope,calls) VALUES(?,?,?) ON CONFLICT(day,scope) DO UPDATE SET calls=excluded.calls", (day, scope, calls))
+        conn.commit()
+
+
+def purge_usage_before(day: str) -> None:
+    with closing(connect()) as conn:
+        conn.execute("DELETE FROM usage_daily WHERE day<?", (day,))
         conn.commit()

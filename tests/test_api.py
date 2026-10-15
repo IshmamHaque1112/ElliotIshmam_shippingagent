@@ -87,7 +87,7 @@ def test_posts_need_csrf():
 def test_analyze_saves_case_and_logs_the_run(monkeypatch):
     patch_client(monkeypatch, submit_client())
     r = post("/api/shipments/SH-1004/analyze")
-    assert r.status_code == 200 and r.get_json()["narrative"] == "claude" and limits.count == 1
+    assert r.status_code == 200 and r.get_json()["narrative"] == "claude" and limits.used() == 1
     cases = get("/api/cases").get_json()["cases"]
     assert len(cases) == 1 and cases[0]["stale"] is False and cases[0]["case"]["financial"]["total_exposure_usd"] == 37575.0
     run = get("/api/runs").get_json()
@@ -111,7 +111,7 @@ def test_api_errors_are_logged_and_use_the_cap(monkeypatch):
         raise APIStatusError("boom", response=SimpleNamespace(status_code=500, headers={}, request=None), body=None)
     patch_client(monkeypatch, SimpleNamespace(messages=SimpleNamespace(create=boom)))
     r = post("/api/shipments/SH-1004/analyze")
-    assert r.status_code == 502 and limits.count == 1
+    assert r.status_code == 502 and limits.used() == 1
     assert get("/api/runs").get_json()["runs"][0]["status"] == "error"
 
 
@@ -119,17 +119,17 @@ def test_missing_key_and_connection_errors_do_not_use_the_cap(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None, raising=False)
     assert [post("/api/shipments/SH-1004/analyze").status_code for _ in range(limits.MAX_ANALYSES + 1)] == [503] * (limits.MAX_ANALYSES + 1)
-    assert limits.count == 0
+    assert limits.used() == 0
 
     def unreachable(**kw):
         raise APIConnectionError(request=None)
     patch_client(monkeypatch, SimpleNamespace(messages=SimpleNamespace(create=unreachable)))
     assert post("/api/shipments/SH-1004/analyze").status_code == 502
-    assert limits.count == 0 and get("/api/runs").get_json()["runs"] == []
+    assert limits.used() == 0 and get("/api/runs").get_json()["runs"] == []
 
 
 def test_cap_blocks_before_any_model_call(monkeypatch):
-    monkeypatch.setattr(limits, "count", limits.MAX_ANALYSES)
+    limits.set_used(limits.MAX_ANALYSES)
     monkeypatch.setattr(webapp.api.analysis.agent, "make_client", lambda: (_ for _ in ()).throw(AssertionError("must not run")))
     assert post("/api/shipments/SH-1004/analyze").status_code == 429
 

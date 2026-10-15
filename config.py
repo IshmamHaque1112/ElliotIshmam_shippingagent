@@ -1,6 +1,7 @@
 """Every tunable threshold in one place (PRD section 6). Rule logic never reads the real clock."""
 
 import os
+from contextvars import ContextVar
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -15,7 +16,31 @@ DATASET_FILES = {
 }
 
 
+TOGGLE_DATASETS = ("dev", "extended", "edge")   # what the header toggle may offer; a private DATASET_FILE is never listed
+
+_dataset_override: ContextVar[str | None] = ContextVar("dataset_override", default=None)
+
+
+def use_dataset(name: str | None):
+    """Pin the dataset for the current request (a signed-in session's own choice). Returns a token for reset_dataset."""
+    if name is not None and name not in TOGGLE_DATASETS:
+        raise ValueError(f"dataset must be one of {TOGGLE_DATASETS}, got {name!r}")
+    return _dataset_override.set(name)
+
+
+def reset_dataset(token) -> None:
+    _dataset_override.reset(token)
+
+
+def default_dataset() -> str:
+    """The dataset a new session starts on: DATASET from the environment, else dev."""
+    name = (os.environ.get("DATASET") or "dev").strip().lower()
+    return name if name in TOGGLE_DATASETS else "dev"
+
+
 def dataset_name() -> str:
+    if _dataset_override.get() is not None:
+        return _dataset_override.get()
     if os.environ.get("DATASET_FILE"):
         return "custom"  # a private data file chosen by path (eval only); it is never committed
     name = (os.environ.get("DATASET") or "dev").strip().lower()
@@ -25,14 +50,14 @@ def dataset_name() -> str:
 
 
 def dataset_path(name: str | None = None) -> Path:
-    if not name and os.environ.get("DATASET_FILE"):
+    if not name and not _dataset_override.get() and os.environ.get("DATASET_FILE"):
         return Path(os.environ["DATASET_FILE"])
     return DATA_DIR / DATASET_FILES[name or dataset_name()][0]
 
 
 def fault_schedule_path(name: str | None = None) -> Path | None:
     """None means no faults (a private data file without a fault file)."""
-    if not name and os.environ.get("DATASET_FILE"):
+    if not name and not _dataset_override.get() and os.environ.get("DATASET_FILE"):
         return Path(os.environ["FAULTS_FILE"]) if os.environ.get("FAULTS_FILE") else None
     return DATA_DIR / DATASET_FILES[name or dataset_name()][1]
 
@@ -89,3 +114,20 @@ WATCH_MIN_REVISIONS = 1
 
 # Approval request drafts: who must approve besides the dispatcher, and the allowed status flow.
 APPROVAL_FLOW = {None: ("drafted",), "drafted": ("requested",), "requested": ("approved", "declined"), "approved": (), "declined": ()}
+
+# Sign-in (session_auth.py). Failed-login lockouts are per client address and, with a higher bar, per username.
+SESSION_COOKIE = "copilot_session"
+LOGIN_NONCE_COOKIE = "copilot_login"
+SESSION_LIFETIME_H = 12
+LOGIN_WINDOW_MIN = 15
+LOGIN_MAX_FAILURES_IP = 5
+LOGIN_MAX_FAILURES_USER = 20
+
+# Claude call budget (limits.py): shared across restarts and workers through the database, counted per calendar day.
+DAILY_CALLS_GLOBAL = 50          # everything on this server, all sessions
+DAILY_CALLS_PER_SESSION = 10     # one signed-in session (or one script identity)
+USAGE_TIMEZONE = "America/New_York"   # where the day rolls over
+USAGE_KEEP_DAYS = 14
+
+# Early-warning metric (early_warning.py)
+ADMISSION_CODES = ("EXCEPTION", "HELD", "CUSTOMS_HOLD", "DELIVERY_ATTEMPTED")

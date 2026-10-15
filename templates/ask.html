@@ -4,7 +4,7 @@
 <h1>Ask the queue</h1><p class="sub">Ask about the current exceptions in plain words. Claude answers using read-only lookups over this page's data; every shipment id and dollar figure in the answer is checked against what the lookups returned. Nothing is sent or changed.</p>
 <section class="panel"><form method="post" action="/ask" data-confirm="This sends your question to Anthropic and uses API credits. Continue?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <label for="question">Your question</label><textarea id="question" name="question" rows="3" maxlength="{{ max_chars }}" placeholder="Which VIP shipments are at risk, and how much is exposed in total?" required>{{ question }}</textarea>
-  <p><button class="primary" type="submit"{% if not remaining %} disabled{% endif %}>Ask Claude</button> <span class="muted">{{ remaining }} of {{ max_analyses }} Claude calls left in this server run (questions count too).</span></p></form></section>
+  <p><button class="primary" type="submit"{% if not remaining %} disabled{% endif %}>Ask Claude</button> <span class="muted">{{ remaining }} of {{ max_analyses }} Claude calls left today (questions count too).</span></p></form></section>
 {% if result %}<section class="panel" aria-live="polite"><h2>Answer</h2>
   {% if result.answer %}<p class="answer">{{ result.answer }}</p>
     <p class="muted">Shipments mentioned: {% for s in result.shipment_ids %}<a href="/shipments/{{ s }}">{{ s }}</a>{{ ', ' if not loop.last }}{% else %}none{% endfor %} · {{ chip('ok' if result.status == 'ok' else 'fallback', result.status) }}</p>

@@ -113,6 +113,7 @@ def _row(sh: dict[str, Any], a: dict[str, Any], dataset: dict[str, Any], rank: i
 
 _cache_lock = Lock()
 _cache: dict[tuple, Snapshot] = {}
+CACHE_SIZE = 8
 
 
 def snapshot() -> Snapshot:
@@ -133,7 +134,8 @@ def snapshot() -> Snapshot:
         rows = [_row(sh, by_id[sh["shipment_id"]], service.dataset, ranks.get(sh["shipment_id"])) for sh in service.dataset["shipments"]]
         snap = Snapshot(key[0], rules.iso(now_of(service.dataset)), service.dataset, assessments, by_id, queue,
                         value_at_risk(assessments), rows, watch_module.compute(assessments, rules.iso(now_of(service.dataset))))
-        _cache.clear()   # keep only the latest state; the cache is tiny
+        while len(_cache) >= CACHE_SIZE:   # a few recent states, so switching datasets back and forth stays instant
+            _cache.pop(next(iter(_cache)))
         _cache[key] = snap
         return snap
 

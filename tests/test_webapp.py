@@ -18,7 +18,6 @@ def configure(monkeypatch):
     monkeypatch.setenv("DEMO_USERNAME", "pursuit-demo")
     monkeypatch.setenv("DEMO_PASSWORD", "test-only-password")
     monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret")
-    limits.count = 0
     webapp.app.config.update(TESTING=True)
 
 
@@ -55,12 +54,14 @@ def test_unknown_and_on_track_cases_are_404():
     assert c.get("/case/SH-1001", headers=basic()).status_code == 404
 
 
-def test_login_required_and_bad_headers_get_401_not_500():
+def test_login_required_and_bad_headers_never_cause_a_500():
     c = webapp.app.test_client()
-    assert c.get("/").status_code == 401
-    assert c.get("/", headers=basic("démo", "pw")).status_code == 401
-    assert c.get("/", headers={"Authorization": "Bearer abc"}).status_code == 401
-    assert c.get("/", headers={"Authorization": "Basic !!!"}).status_code == 401
+    r = c.get("/")
+    assert r.status_code == 302 and r.headers["Location"].startswith("/login")   # a browser is sent to the sign-in page
+    bad = [basic("démo", "pw"), {"Authorization": "Bearer abc"}, {"Authorization": "Basic !!!"}]
+    for headers in bad:
+        assert c.get("/", headers=headers).status_code == 302
+        assert c.get("/api/summary", headers=headers).status_code == 401   # scripts get a plain 401
 
 
 @pytest.mark.parametrize("missing", ["DEMO_USERNAME", "DEMO_PASSWORD", "FLASK_SECRET_KEY"])
@@ -78,7 +79,7 @@ def test_analyze_without_csrf_token_is_forbidden(monkeypatch):
 
 
 def test_cap_stops_before_the_model_call(monkeypatch):
-    limits.count = limits.MAX_ANALYSES
+    limits.set_used(limits.MAX_ANALYSES)
     monkeypatch.setattr(agent, "make_client", lambda: (_ for _ in ()).throw(AssertionError("must not run")))
     c = webapp.app.test_client()
     # Get the case page directly to get the CSRF token
@@ -94,7 +95,7 @@ def test_missing_key_does_not_use_the_cap_and_shows_rules_only(monkeypatch):
     monkeypatch.setattr(agent, "make_client", no_key)
     c, token = client_with_token()
     codes = [analyze(c, token).status_code for _ in range(limits.MAX_ANALYSES + 1)]
-    assert 429 not in codes and limits.count == 0
+    assert 429 not in codes and limits.used() == 0
     response = analyze(c, token)
     # Check if it's a redirect or direct response
     if response.status_code == 302:
@@ -110,7 +111,7 @@ def test_connection_failures_do_not_use_the_cap(monkeypatch):
     monkeypatch.setattr(agent, "make_client", unreachable)
     c, token = client_with_token()
     codes = [analyze(c, token).status_code for _ in range(limits.MAX_ANALYSES + 1)]
-    assert 429 not in codes and limits.count == 0
+    assert 429 not in codes and limits.used() == 0
 
 
 def test_requests_that_reach_the_api_use_the_cap(monkeypatch):
@@ -121,7 +122,7 @@ def test_requests_that_reach_the_api_use_the_cap(monkeypatch):
     monkeypatch.setattr(agent, "investigate", server_error)
     c, token = client_with_token()
     assert analyze(c, token).status_code == 200
-    assert limits.count == 1
+    assert limits.used() == 1
 
 
 def test_model_text_is_escaped_in_the_case_page(monkeypatch):

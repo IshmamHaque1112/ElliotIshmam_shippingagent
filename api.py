@@ -143,10 +143,17 @@ def replay_post(action: str):
     import views
     security.check_csrf()
     try:
-        views.replay_apply(action, float(_body()["hours"]) if _body().get("hours") else None)
+        views.replay_apply(action, views.parse_hours(_body()["hours"], maximum=24 * 30) if _body().get("hours") not in (None, "") else None)
     except (ValueError, KeyError):
         return fail("bad replay request", 400)
     return ok(**views.replay_state())
+
+
+@bp.get("/early-warning")
+def early_warning_api():
+    import early_warning
+    ew = early_warning.for_snapshot(pipeline.snapshot())
+    return ok(dataset=pipeline.snapshot().dataset_name, **ew)
 
 
 @bp.get("/forecast")
@@ -174,7 +181,8 @@ def runs():
 
 
 def _body() -> dict[str, Any]:
-    return request.get_json(silent=True) or request.form.to_dict()
+    body = request.get_json(silent=True)
+    return body if isinstance(body, dict) else request.form.to_dict()
 
 
 @bp.post("/cases/<int:case_id>/disposition")

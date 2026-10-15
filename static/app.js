@@ -55,3 +55,22 @@ document.querySelectorAll("[data-print]").forEach(function (button) {
   play.addEventListener("click", function () { play.disabled = true; pause.disabled = false; status.textContent = "Playing…"; tick(); timer = setInterval(tick, 1000); });
   pause.addEventListener("click", function () { stop("Paused."); });
 })();
+
+// Dataset toggle: choosing a dataset submits the form and shows a spinner until the new page arrives.
+// Without JavaScript the Switch button does the same job.
+(function () {
+  document.documentElement.classList.add("js");
+  var form = document.getElementById("dataset-form"), select = document.getElementById("dataset-toggle");
+  var overlay = document.getElementById("loading"), text = document.getElementById("loading-text");
+  if (!form || !select || !overlay) return;
+  form.addEventListener("submit", function () {
+    text.textContent = "Loading " + select.value + " data…";
+    overlay.hidden = false;
+    select.setAttribute("aria-busy", "true");
+  });
+  select.addEventListener("change", function () {
+    if (typeof form.requestSubmit === "function") form.requestSubmit(); else form.submit();
+  });
+  // Coming back with the Back button can restore the page with the spinner still showing.
+  window.addEventListener("pageshow", function () { overlay.hidden = true; select.removeAttribute("aria-busy"); });
+})();

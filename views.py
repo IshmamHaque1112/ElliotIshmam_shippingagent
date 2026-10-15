@@ -3,12 +3,14 @@
 import csv
 import io
 import json
+import math
+import secrets
 from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
 from jinja2 import Undefined
-from flask import Blueprint, Response, abort, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, g, make_response, redirect, render_template, request, url_for
 
 import analysis
 import approvals
@@ -18,6 +20,7 @@ import claims
 import clustering
 import charts
 import config
+import early_warning
 import eval_view
 import forecast as forecast_module
 import handoff as handoff_module
@@ -32,15 +35,18 @@ import sim
 import store
 
 bp = Blueprint("views", __name__)
-NAV = [("views.dashboard", "Dashboard"), ("views.shipments", "Deliveries"), ("views.queue", "Ranking"), ("views.cases", "Cases"), ("views.handoff", "Handoff"), ("views.ask", "Ask"),
+NAV = [("views.dashboard", "Dashboard"), ("views.shipments", "Deliveries"), ("views.queue", "Ranking"), ("views.cases", "Cases"), ("views.handoff", "Handoff"), ("views.early_warning_page", "Early warning"), ("views.ask", "Ask"),
        ("views.runs", "Claude runs"), ("views.carriers", "Carriers"), ("views.digest", "Digest"), ("views.evaluation", "Eval"),
        ("views.simulate", "Simulate")]
 
 
 @bp.app_context_processor
 def inject():
+    identity = g.get("identity")
     return {"csrf_token": security.csrf_token(), "nav": NAV, "sim_offset": sim.offset_hours(), "replay_on": sim.replay_utc(), "dataset_name": config.dataset_name(),
-            "remaining": limits.remaining(), "max_analyses": limits.MAX_ANALYSES, "active": request.endpoint}
+            "remaining": limits.remaining(), "max_analyses": limits.MAX_ANALYSES, "active": request.endpoint,
+            "signed_in": identity is not None, "can_switch": identity is not None and identity.kind == "session",
+            "datasets": config.TOGGLE_DATASETS, "signed_in_user": identity.user if identity else None}
 
 
 @bp.app_template_filter("usd")
@@ -132,7 +138,8 @@ def dashboard(batch=None, error=None):
         carrier_chart=charts.bar_chart(sorted(((k, v, "c-acc") for k, v in by_carrier.items()), key=lambda i: -i[1]), usd_fmt, label="Exposure by carrier"),
         cause_chart=charts.bar_chart(sorted(((k, v, "c-unk" if k == "Not analyzed" else "c-warn") for k, v in by_cause.items()), key=lambda i: -i[1]), usd_fmt, label="Exposure by root cause"),
         status=status, options=options, cost_note=cost_estimate(1), batch=batch, error=error,
-        incidents=incidents, watching=watching, forecast=fc, forecast_chart=charts.forecast_chart(fc["points"]))
+        incidents=incidents, watching=watching, forecast=fc, forecast_chart=charts.forecast_chart(fc["points"]),
+        early=early_warning.for_snapshot(snap)["summary"])
 
 
 @bp.post("/analyze-top")
@@ -205,7 +212,15 @@ def shipment(shipment_id: str):
         penalty_chart=charts.penalty_chart(order, a["hours_late_now"], a["projected_hours_late"])
         if order and a["state"] in ("delayed", "at_risk", "delivered_late") else None,
         what=what, saved=saved, current_hash=current_hash, snap=snap, is_exception=a["state"] in pipeline.EXCEPTION_STATES,
+        early=early_warning.row_for(early_warning.for_snapshot(snap), a["shipment_id"]), early_labels=early_warning.LABELS,
         raw=json.dumps({k: data.get(k) for k in ("get_tracking_status", "order_context", "event_timeline")}, indent=2))
+
+
+# ---------------------------------------------------------------- early warning
+@bp.get("/early-warning")
+def early_warning_page():
+    snap = pipeline.snapshot()
+    return render_template("early_warning.html", snap=snap, ew=early_warning.for_snapshot(snap), order=early_warning.CATEGORIES)
 
 
 # ---------------------------------------------------------------- ranking
@@ -496,9 +511,91 @@ def digest():
     return render_template("digest.html", daily=daily, closed=closed, text=text, snap=snap)
 
 
+# ---------------------------------------------------------------- sign-in
+def parse_hours(value: Any, *, allow_zero: bool = False, maximum: float = 24 * 365) -> float:
+    """A clean number of hours, or ValueError. Rejects text, NaN, infinity, negatives and absurd values up front."""
+    try:
+        hours = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("hours must be a number") from None
+    if not math.isfinite(hours) or hours < 0 or (hours == 0 and not allow_zero) or hours > maximum:
+        raise ValueError(f"hours must be between {'0' if allow_zero else 'more than 0'} and {maximum:g}")
+    return hours
+
+
+def login_page(error: str | None = None, status: int = 200, next_url: str = "/"):
+    nonce = request.cookies.get(config.LOGIN_NONCE_COOKIE) or secrets.token_urlsafe(16)
+    response = make_response(render_template("login.html", error=error, next_url=next_url, login_csrf=security.login_token(nonce)), status)
+    response.set_cookie(config.LOGIN_NONCE_COOKIE, nonce, max_age=3600, httponly=True, samesite="Lax", secure=security.secure_cookies(), path="/login")
+    return response
+
+
+@bp.get("/login")
+def login():
+    identity, _ = security.authenticate()
+    if identity is not None and identity.kind == "session":
+        return redirect(security.safe_next(request.args.get("next")), 302)
+    return login_page(next_url=security.safe_next(request.args.get("next")))
+
+
+@bp.post("/login")
+def login_post():
+    security.check_login_csrf()
+    username, password = request.form.get("username", "")[:200], request.form.get("password", "")[:500]
+    target = security.safe_next(request.form.get("next"))
+    if security.locked_out(username):
+        return login_page("Too many failed sign-ins. Try again in a few minutes.", 429, target)
+    if not security.credentials_ok(username, password):
+        store.record_login(security.client_ip(), username, False)
+        return login_page("That username and password do not match.", 401, target)   # same words for a wrong name or a wrong password
+    store.record_login(security.client_ip(), username, True)
+    sid = security.new_sid()
+    store.create_session(sid, username, config.default_dataset(), config.SESSION_LIFETIME_H)
+    response = redirect(target, 303)
+    security.set_session_cookie(response, sid)
+    response.delete_cookie(config.LOGIN_NONCE_COOKIE, path="/login")
+    return response
+
+
+@bp.post("/logout")
+def logout():
+    security.check_csrf()
+    identity = g.get("identity")
+    if identity is not None and identity.sid:
+        store.revoke_session(identity.sid)
+    response = redirect("/login", 303)
+    security.clear_session_cookie(response)
+    return response
+
+
+@bp.post("/dataset")
+def switch_dataset():
+    """The header toggle. Only a signed-in session has a choice to make; the value must be one of the fixed names."""
+    security.check_csrf()
+    identity = g.get("identity")
+    chosen = request.form.get("dataset", "")
+    if identity is None or identity.kind != "session" or chosen not in config.TOGGLE_DATASETS:
+        abort(400)
+    store.set_session_dataset(identity.sid, chosen)
+    return redirect("/", 303)   # shipment ids differ between datasets, so a detail page would not exist any more
+
+
+@bp.get("/healthz")
+def healthz():
+    """For the host's health check: confirms the database answers. It never calls Claude."""
+    try:
+        store.get_setting("health")
+    except Exception:
+        return Response("database unavailable", 503, mimetype="text/plain")
+    return Response("ok", 200, mimetype="text/plain")
+
+
 # ---------------------------------------------------------------- simulation
 def _persist() -> None:
-    store.set_setting("sim", sim.export())
+    """A signed-in session's clock is saved with the session when the request ends; scripts share one saved state."""
+    identity = g.get("identity")
+    if identity is None or identity.kind != "session":
+        store.set_setting("sim", sim.export())
     pipeline.clear_cache()
 
 
@@ -540,7 +637,7 @@ def replay_apply(action: str, hours: float | None = None) -> None:
 def simulate_replay(action: str):
     security.check_csrf()
     try:
-        replay_apply(action, float(request.form["hours"]) if request.form.get("hours") else None)
+        replay_apply(action, parse_hours(request.form["hours"], maximum=24 * 30) if request.form.get("hours") else None)
     except (ValueError, KeyError):
         abort(400)
     return redirect(url_for("views.simulate") + "#replay", 303)
@@ -564,8 +661,7 @@ def tools_schedule() -> dict[str, Any]:
 def simulate_advance():
     security.check_csrf()
     try:
-        hours = float(request.form.get("hours", ""))
-        sim.advance(hours)
+        sim.advance(parse_hours(request.form.get("hours", ""), allow_zero=True))
     except ValueError:
         abort(400)
     _persist()

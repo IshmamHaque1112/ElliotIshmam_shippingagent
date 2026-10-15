@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Delayed Shipment Co-Pilot</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="signin">
+  <main class="login" id="main">
+    <h1>Delayed Shipment Co-Pilot</h1>
+    {% if error %}<div class="banner err" role="alert">{{ error }}</div>{% endif %}
+    <form class="panel" method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ login_csrf }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <div class="field"><label for="username">Username</label><input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+      <button class="primary" type="submit">Sign in</button>
+    </form>
+    <p class="pitch">Hi. We are Elliot and Ishmam. We are intending to provide a shipping agent that can flag delayed cases before even the carriers can even figure out what is going on, and rank it by money lost.</p>
+  </main>
+</body>
+</html>

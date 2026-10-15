@@ -455,14 +455,14 @@ def test_ask_page_and_api_use_the_cap_and_match_analyze_behaviour(monkeypatch):
     assert post("/api/ask", json_body={"question": "q"}).status_code == 502 and limits.remaining() == limits.MAX_ANALYSES - 1   # reached Anthropic: slot used
     assert store.list_runs()[0]["kind"] == "ask" and store.list_runs()[0]["status"] == "error"
 
-    limits.count = limits.MAX_ANALYSES
+    limits.set_used(limits.MAX_ANALYSES)
     assert post("/api/ask", json_body={"question": "q"}).status_code == 429
     r = post("/ask", {"question": "q"})
     assert r.status_code == 429 and "analysis limit" in r.get_data(as_text=True)
 
 
 def test_ask_success_through_the_page_escapes_text_and_shows_in_runs(monkeypatch):
-    limits.count = 0
+    limits.set_used(0)
     patch_client(monkeypatch, [reply(use("get_summary", {})), ask_submit("<script>alert(3)</script> Revenue exposed is $95,845.00.")])
     r = post("/ask", {"question": "<b>total?</b>"})
     html = r.get_data(as_text=True)

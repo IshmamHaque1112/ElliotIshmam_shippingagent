@@ -11,8 +11,19 @@
   <header class="top"><div class="bar">
     <div class="brand"><a href="/">Delayed Shipment Co-Pilot</a></div>
     <nav aria-label="Main">{% for endpoint, label in nav %}<a href="{{ url_for(endpoint) }}"{% if active == endpoint %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
-    <div class="tag">Read-only demo · {{ dataset_name }} data</div>
+    <div class="tools">
+      {% if can_switch %}<form class="ds" method="post" action="/dataset" id="dataset-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="dataset-toggle">Dataset</label>
+        <select name="dataset" id="dataset-toggle">{% for d in datasets %}<option value="{{ d }}"{% if d == dataset_name %} selected{% endif %}>{{ d }}</option>{% endfor %}</select>
+        <button class="apply" type="submit">Switch</button>
+      </form>{% endif %}
+      <div class="tag">Read-only demo · {{ dataset_name }} data</div>
+      {% if signed_in %}<div class="tag" title="Claude calls you can still make today; the day resets at midnight Eastern time">Claude calls left today: {{ remaining }}</div>{% endif %}
+      {% if signed_in and signed_in_user %}<form class="inline" method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Sign out</button></form>{% endif %}
+    </div>
   </div></header>
+  <div class="loading" id="loading" role="status" aria-live="polite" hidden><img src="/static/loading.gif" alt="" width="48" height="48"><span id="loading-text">Loading data…</span></div>
   <main id="main">
     {% if replay_on %}<div class="banner warn" role="status">Replay is on: showing the data as of {{ replay_on }} UTC. <a href="/simulate#replay">Replay controls</a></div>{% endif %}
     {% if sim_offset %}<div class="banner warn" role="status">Simulated clock is +{{ "%g"|format(sim_offset) }} h. Saved Claude cases from earlier may be stale. <a href="/simulate">Simulation controls</a></div>{% endif %}

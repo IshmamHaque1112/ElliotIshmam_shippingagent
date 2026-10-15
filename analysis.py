@@ -109,7 +109,7 @@ def analyze_with_cap(shipment_id: str) -> tuple[str, Outcome | None, str | None]
     Returns (kind, outcome, message) where kind is ok, limit, no_key, connection or api_error.
     """
     if not limits.reserve():
-        return "limit", None, LIMIT_MESSAGE
+        return "limit", None, limits.message()
     try:
         return "ok", analyze(shipment_id), None
     except MissingKeyError as error:

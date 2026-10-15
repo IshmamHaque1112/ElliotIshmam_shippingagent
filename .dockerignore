@@ -6,3 +6,7 @@ runs.db
 eval_results.json
 eval_history.jsonl
 report.html
+.private_eval
+.pytest_cache
+tests
+.github
